@@ -1,0 +1,44 @@
+# secrets — see RULES.md #6
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+keystore/
+
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# builds
+dist/
+build/
+out/
+.next/
+.output/
+.vercel/
+.wxt/
+web-ext-artifacts/
+
+# foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+contracts/lib/
+
+# testing
+coverage/
+*.lcov
+test-results/
+playwright-report/
+
+# editors / os
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+
+# logs
+*.log
+npm-debug.log*
