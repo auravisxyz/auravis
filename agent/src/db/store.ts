@@ -23,6 +23,7 @@ function rowToTrigger(row: TriggerRow): Trigger {
     direction: row.direction as "below" | "above",
     targetPrice: row.targetPrice,
     amountIn: BigInt(row.amountIn),
+    mode: row.mode as "catch" | "auto",
   };
 }
 

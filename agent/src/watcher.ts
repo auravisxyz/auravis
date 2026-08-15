@@ -20,6 +20,11 @@ export interface Trigger {
   targetPrice: number;
   /** Amount of spendToken to use when this fires, in base units. */
   amountIn: bigint;
+  /**
+   * catch — record the catch and wait for the user's confirmation.
+   * auto  — execute immediately; the mandate's on-chain limits are the leash.
+   */
+  mode: "catch" | "auto";
 }
 
 export type TriggerFire = {

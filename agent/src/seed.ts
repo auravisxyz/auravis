@@ -28,16 +28,23 @@ async function main() {
     );
   }
 
+  // `npm run seed -- --auto` seeds an auto-mode trigger; default is catch.
+  const mode = process.argv.includes("--auto") ? ("auto" as const) : ("catch" as const);
+
+  // Prefer the testnet rig's token when configured, so an auto fire has a
+  // real router to execute against. Falls back to mainnet USDC otherwise.
+  const token = config.mockUsdt ?? "0x74b7f16337b8972027f6196a17a631ac6de26d22";
+
   // Target is deliberately far above the mock price ($100 by default) so the
   // "below" condition is already true and it fires on the very next tick.
   const trigger = await createTrigger({
     mandateId: 0n,
-    token: "0x74b7f16337b8972027f6196a17a631ac6de26d22", // USDC on X Layer
+    token,
     direction: "below",
     targetPrice: 200,
-    amountIn: 50_000_000n, // 50 USDC, 6 decimals
-    intent: "buy $50 worth if it drops below $200",
-    mode: "catch",
+    amountIn: 10_000_000n, // 10 units at 6 decimals — inside the rig's 50/hr window
+    intent: `${mode === "auto" ? "auto-" : ""}buy $10 worth if it drops below $200`,
+    mode,
   });
 
   console.log("Seeded trigger:", {

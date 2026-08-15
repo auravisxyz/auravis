@@ -224,3 +224,5 @@ export type ExtensionMessage =
  */
 export { PatternIntentExtractor, INTENT_SYSTEM_PROMPT } from "./intent.js";
 export type { IntentExtractor } from "./intent.js";
+export { ModelIntentExtractor } from "./model-intent.js";
+export type { ModelConfig } from "./model-intent.js";

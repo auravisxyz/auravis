@@ -97,17 +97,48 @@ export default function App() {
     }
   }
 
+  /**
+   * Extraction prefers the dashboard's /api/intent (which may have a real
+   * model behind it, key held server-side) and falls back to the local
+   * pattern extractor when the dashboard is unreachable. The popup must never
+   * depend on a server to function — offline capture-and-watch is the promise.
+   */
   async function runExtract() {
     if (!capture || !instruction.trim()) return;
     setStage("extracting");
     setActionError(null);
+
+    const text = instruction.trim();
     try {
-      const result = await extractor.extract(capture, instruction.trim());
-      setDraft(result);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4_000);
+      try {
+        const res = await fetch(`${APP_URL}/api/intent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ capture, instruction: text }),
+          signal: controller.signal,
+        });
+        if (res.ok) {
+          const body = (await res.json()) as { draft: IntentDraft };
+          setDraft(body.draft);
+          setStage("review");
+          return;
+        }
+      } finally {
+        clearTimeout(timeout);
+      }
+      // Non-OK response falls through to the local extractor.
+      setDraft(await extractor.extract(capture, text));
       setStage("review");
     } catch {
-      setError("Could not understand that instruction. Try rephrasing it.");
-      setStage("error");
+      try {
+        setDraft(await extractor.extract(capture, text));
+        setStage("review");
+      } catch {
+        setError("Could not understand that instruction. Try rephrasing it.");
+        setStage("error");
+      }
     }
   }
 

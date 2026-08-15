@@ -17,6 +17,14 @@ const schema = z.object({
   MANDATE_ADDRESS_TESTNET: z.string().optional(),
   MANDATE_ADDRESS_MAINNET: z.string().optional(),
 
+  // -- testnet rehearsal rig (contracts/script/DeployTestnetRig.s.sol) -------
+  // The OKX aggregator is mainnet-only, so testnet auto-execution routes
+  // through this rig instead. All optional; without them, auto mode on
+  // testnet degrades to a recorded "no route" skip.
+  MOCK_ROUTER_TESTNET: z.string().optional(),
+  MOCK_USDT_TESTNET: z.string().optional(),
+  MOCK_USDC_TESTNET: z.string().optional(),
+
   // -- agent identity ----------------------------------------------------
   AGENT_PRIVATE_KEY: z.string().min(1, "AGENT_PRIVATE_KEY is required"),
   AGENT_POLL_INTERVAL_MS: z.coerce.number().default(15_000),
@@ -64,6 +72,10 @@ export const config = {
   chainId: env.NETWORK === "mainnet" ? env.XLAYER_MAINNET_CHAIN_ID : env.XLAYER_TESTNET_CHAIN_ID,
   mandateAddress:
     env.NETWORK === "mainnet" ? env.MANDATE_ADDRESS_MAINNET : env.MANDATE_ADDRESS_TESTNET,
+
+  mockRouter: env.MOCK_ROUTER_TESTNET as `0x${string}` | undefined,
+  mockUsdt: env.MOCK_USDT_TESTNET as `0x${string}` | undefined,
+  mockUsdc: env.MOCK_USDC_TESTNET as `0x${string}` | undefined,
 
   agent: {
     privateKey: env.AGENT_PRIVATE_KEY as `0x${string}`,
