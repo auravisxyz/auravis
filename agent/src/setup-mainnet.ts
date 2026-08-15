@@ -144,15 +144,20 @@ async function main() {
   const ownerBal = (await usdt.read.balanceOf([owner.address])) as bigint;
   console.log(`\n[3] USDT — vault ${formatUnits(vaultBal, 6)}, owner ${formatUnits(ownerBal, 6)}`);
 
+  let fundingShortfall = false;
   if (vaultBal < SPEND_AMOUNT) {
     const short = SPEND_AMOUNT - vaultBal;
     if (ownerBal < short) {
-      fail(
-        `Vault needs ${formatUnits(short, 6)} more USDT and the owner only has ` +
-          `${formatUnits(ownerBal, 6)}. Send USDT to ${owner.address} first.`,
-      );
-    }
-    if (!CONFIRM) {
+      fundingShortfall = true;
+      // In dry run this is information, not a failure — the whole point is to
+      // see every remaining step at once rather than discovering them one
+      // funding round at a time.
+      const msg =
+        `Vault needs ${formatUnits(short, 6)} more USDT and the owner has ` +
+        `${formatUnits(ownerBal, 6)}. Send USDT to ${owner.address}.`;
+      if (CONFIRM) fail(msg);
+      console.log(`    ⚠️  ${msg}`);
+    } else if (!CONFIRM) {
       console.log(`    would approve + deposit ${formatUnits(short, 6)} USDT into the vault`);
     } else {
       const approve = await ownerClient.writeContract({
@@ -206,11 +211,18 @@ async function main() {
     console.log("\n[5] No mandate yet — re-run with --confirm to create one.");
   }
 
-  console.log(
-    CONFIRM
-      ? "\nSetup complete. Nothing has been swapped yet — run the execute step separately."
-      : "\nDry run finished. Nothing was sent. Re-run with --confirm when the numbers look right.",
-  );
+  if (CONFIRM) {
+    console.log("\nSetup complete. Nothing has been swapped yet — execute runs separately.");
+  } else {
+    console.log("\nDry run finished. Nothing was sent.");
+    console.log("\nStill needed before --confirm:");
+    if (ownerGas === 0n) console.log(`  • OKB for gas → owner ${owner.address}`);
+    if (fundingShortfall) console.log(`  • USDT for the swap float → owner ${owner.address}`);
+    if (agentGas === 0n) console.log(`  • OKB for gas → agent ${agentAccount.address}`);
+    if (ownerGas > 0n && agentGas > 0n && !fundingShortfall) {
+      console.log("  • nothing — re-run with --confirm when ready.");
+    }
+  }
   process.exit(0);
 }
 
