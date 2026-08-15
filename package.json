@@ -1,0 +1,9 @@
+{
+  "name": "auravis",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Point at anything, say what you want, and let an agent act within a limit it cannot exceed.",
+  "scripts": {
+    "check:sync": "node scripts/check-sync.mjs"
+  }
+}

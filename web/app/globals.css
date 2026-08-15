@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+/**
+ * Design tokens — deliberately identical to the extension's
+ * (extension/entrypoints/popup/style.css). The two surfaces are one product;
+ * if a colour changes it changes in both, and nothing here should ever be
+ * inlined at a call site. See RULES.md #3.
+ */
+@theme {
+  --color-canvas: oklch(0.17 0.012 265);
+  --color-surface: oklch(0.22 0.014 265);
+  --color-surface-raised: oklch(0.26 0.016 265);
+  --color-line: oklch(0.32 0.018 265);
+
+  --color-ink: oklch(0.97 0.004 265);
+  --color-ink-muted: oklch(0.72 0.012 265);
+  --color-ink-faint: oklch(0.58 0.012 265);
+
+  --color-accent: oklch(0.78 0.17 155);
+  --color-accent-ink: oklch(0.18 0.03 155);
+
+  --color-warn: oklch(0.82 0.15 85);
+  --color-danger: oklch(0.68 0.19 25);
+
+  --radius-card: 0.75rem;
+  --radius-control: 0.5rem;
+}
+
+html,
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}

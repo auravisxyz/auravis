@@ -6,6 +6,9 @@ import { capturePage } from "../../lib/capture.js";
 /** Below this, we ask rather than assume. It's the user's money. */
 const CONFIDENCE_FLOOR = 0.6;
 
+/** Where the dashboard lives. Overridden at build time for production. */
+const APP_URL = import.meta.env.VITE_APP_URL ?? "http://localhost:3000";
+
 type Stage = "capturing" | "ready" | "extracting" | "review" | "error";
 
 const extractor = new PatternIntentExtractor();
@@ -16,6 +19,8 @@ export default function App() {
   const [instruction, setInstruction] = useState("");
   const [draft, setDraft] = useState<IntentDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
     void runCapture();
@@ -61,6 +66,43 @@ export default function App() {
     }
   }
 
+  /**
+   * Hands the draft to the web app and opens it in a tab.
+   *
+   * Signing deliberately does not happen here: a popup has no page context and
+   * therefore no injected wallet to talk to. Posting the draft and opening a
+   * real tab means the user signs with their own wallet, in a window big
+   * enough to actually show them what they're agreeing to.
+   */
+  async function createMandate() {
+    if (!capture || !draft) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const res = await fetch(`${APP_URL}/api/drafts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ capture, draft }),
+      });
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? `Server returned ${res.status}.`);
+      }
+
+      const { id } = (await res.json()) as { id: string };
+      await browser.tabs.create({ url: `${APP_URL}/confirm/${id}` });
+      window.close();
+    } catch (err) {
+      setCreateError(
+        err instanceof Error
+          ? `${err.message} Is the dashboard running at ${APP_URL}?`
+          : "Could not reach the dashboard.",
+      );
+      setCreating(false);
+    }
+  }
+
   return (
     <main className="flex flex-col gap-4 p-4">
       <Header />
@@ -85,6 +127,9 @@ export default function App() {
           draft={draft}
           capture={capture}
           onBack={() => setStage("ready")}
+          onCreate={createMandate}
+          creating={creating}
+          createError={createError}
         />
       )}
     </main>
@@ -193,10 +238,16 @@ function ReviewCard({
   draft,
   capture,
   onBack,
+  onCreate,
+  creating,
+  createError,
 }: {
   draft: IntentDraft;
   capture: PageCapture;
   onBack: () => void;
+  onCreate: () => void;
+  creating: boolean;
+  createError: string | null;
 }) {
   const unsure = draft.confidence < CONFIDENCE_FLOOR;
   const missingAmount = draft.amount === null;
@@ -245,20 +296,24 @@ function ReviewCard({
         </p>
       )}
 
+      {createError && <p className="text-xs text-danger">{createError}</p>}
+
       <div className="flex gap-2">
         <button
           type="button"
           onClick={onBack}
-          className="flex-1 rounded-control border border-line px-3 py-2 text-sm text-ink hover:bg-surface-raised"
+          disabled={creating}
+          className="flex-1 rounded-control border border-line px-3 py-2 text-sm text-ink hover:bg-surface-raised disabled:opacity-40"
         >
           Back
         </button>
         <button
           type="button"
-          disabled={blocked}
+          disabled={blocked || creating}
+          onClick={onCreate}
           className="flex-1 rounded-control bg-accent px-3 py-2 text-sm font-medium text-accent-ink hover:opacity-90 disabled:opacity-40"
         >
-          Create mandate
+          {creating ? "Opening…" : "Create mandate"}
         </button>
       </div>
 
