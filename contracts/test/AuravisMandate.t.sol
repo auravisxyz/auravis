@@ -67,6 +67,57 @@ contract MockRouter {
     }
 }
 
+/**
+ * @dev A token that ignores allowances entirely. Not a strawman: tokens with
+ *      non-standard or outright broken `transferFrom` exist in the wild, and a
+ *      user can allowlist a router that trades one. Against a token like this
+ *      the exact-approval pattern provides no protection at all — which is the
+ *      entire reason the contract *also* measures its own balance delta.
+ */
+contract LooseToken {
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    function mint(address to, uint256 amount) external {
+        balanceOf[to] += amount;
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        return true;
+    }
+
+    function transfer(address to, uint256 amount) external returns (bool) {
+        balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+
+    /// @dev Deliberately checks and decrements nothing.
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+}
+
+/// @dev Router paired with LooseToken, so it can actually overspend.
+contract LooseRouter {
+    LooseToken public immutable spendToken;
+    MockToken public immutable buyToken;
+    uint256 public rate = 2;
+
+    constructor(LooseToken _spend, MockToken _buy) {
+        spendToken = _spend;
+        buyToken = _buy;
+    }
+
+    function swapButTakeMore(uint256 declared, uint256 actual) external {
+        spendToken.transferFrom(msg.sender, address(this), actual);
+        buyToken.mint(msg.sender, declared * rate);
+    }
+}
+
 contract AuravisMandateTest is Test {
     AuravisMandate internal vault;
     MockToken internal usdc;
@@ -198,9 +249,51 @@ contract AuravisMandateTest is Test {
         vault.execute(id, address(rogue), _swapCalldata(10e6), 10e6, 0, "rogue route");
     }
 
-    /// @notice We measure the real balance delta, so a lying router is caught.
-    function test_RevertsWhenRouterTakesMoreThanDeclared() public {
+    /**
+     * @notice Layer one: with a well-behaved token, the exact approval means an
+     *         overspending router can't even get the tokens. The allowance check
+     *         underflows inside the token and the router call fails outright, so
+     *         we never reach the balance-delta check.
+     */
+    function test_ExactApprovalStopsOverspendAtTheTokenLayer() public {
         uint256 id = _openMandate(500e6, 0, 0);
+
+        bytes memory data =
+            abi.encodeWithSignature("swapButTakeMore(uint256,uint256)", 50e6, 120e6);
+
+        vm.prank(agent);
+        vm.expectRevert(AuravisMandate.RouterCallFailed.selector);
+        vault.execute(id, address(router), data, 50e6, 0, "sneaky router");
+
+        assertEq(vault.getMandate(id).spent, 0, "nothing should be booked");
+    }
+
+    /**
+     * @notice Layer two: against a token that ignores allowances, layer one gives
+     *         no protection — the router really does take 120e6 after we approved
+     *         50e6. The contract measures its own balance and catches it anyway.
+     *         This is the check that has to hold when the token can't be trusted.
+     */
+    function test_RevertsWhenRouterTakesMoreThanDeclared() public {
+        LooseToken loose = new LooseToken();
+        LooseRouter looseRouter = new LooseRouter(loose, target);
+        AuravisMandate v = new AuravisMandate(owner, agent);
+
+        loose.mint(address(v), 1_000e6);
+
+        vm.startPrank(owner);
+        v.setRouterAllowed(address(looseRouter), true);
+        uint256 id = v.openMandate(
+            address(loose),
+            address(target),
+            500e6,
+            0,
+            0,
+            uint64(block.timestamp + 30 days),
+            FAIR_FLOOR,
+            "buy if it drops 8%"
+        );
+        vm.stopPrank();
 
         bytes memory data =
             abi.encodeWithSignature("swapButTakeMore(uint256,uint256)", 50e6, 120e6);
@@ -209,7 +302,9 @@ contract AuravisMandateTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(AuravisMandate.SpentMoreThanDeclared.selector, 50e6, 120e6)
         );
-        vault.execute(id, address(router), data, 50e6, 0, "sneaky router");
+        v.execute(id, address(looseRouter), data, 50e6, 0, "sneaky router");
+
+        assertEq(v.getMandate(id).spent, 0, "nothing should be booked");
     }
 
     function test_RevertsWhenOutputBelowMinimum() public {
@@ -278,11 +373,33 @@ contract AuravisMandateTest is Test {
     }
 
     function test_RejectsExpiryInThePast() public {
+        // Warp first: forge starts block.timestamp at 1, so `block.timestamp - 1`
+        // would be 0 — which the contract reads as "no expiry", not "expired".
+        vm.warp(1_000_000);
+
         vm.prank(owner);
         vm.expectRevert(AuravisMandate.ExpiryInPast.selector);
         vault.openMandate(
             address(usdc), address(target), 100e6, 0, 0, uint64(block.timestamp - 1), FAIR_FLOOR, "stale"
         );
+    }
+
+    /// @notice expiry == 0 is the documented sentinel for "never expires", and
+    ///         must not be mistaken for a timestamp in the past.
+    function test_ZeroExpiryMeansNoExpiry() public {
+        vm.warp(1_000_000);
+
+        vm.prank(owner);
+        uint256 id = vault.openMandate(
+            address(usdc), address(target), 100e6, 0, 0, 0, FAIR_FLOOR, "open ended"
+        );
+
+        vm.warp(block.timestamp + 3650 days);
+
+        vm.prank(agent);
+        vault.execute(id, address(router), _swapCalldata(50e6), 50e6, 0, "still valid years later");
+
+        assertEq(vault.getMandate(id).spent, 50e6);
     }
 
     function test_StrangerCannotExecute() public {

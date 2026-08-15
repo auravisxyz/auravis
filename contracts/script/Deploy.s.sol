@@ -38,12 +38,12 @@ contract Deploy is Script {
         // disposable, owner is the real wallet), this call would revert and take
         // the whole deploy with it. So only attempt it when they're the same.
         if (router == address(0)) {
-            console2.log("  no OKX_DEX_ROUTER set — allowlist a router before executing");
+            console2.log("  no OKX_DEX_ROUTER set -- allowlist a router before executing");
         } else if (owner == vm.addr(deployerKey)) {
             vault.setRouterAllowed(router, true);
             console2.log("  router allowlisted:", router);
         } else {
-            console2.log("  router NOT allowlisted — owner differs from deployer.");
+            console2.log("  router NOT allowlisted -- owner differs from deployer.");
             console2.log("  Owner must call setRouterAllowed() for:", router);
         }
 

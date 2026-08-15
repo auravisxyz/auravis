@@ -66,7 +66,7 @@ docs/        Research and technical notes
 
 | Network | Contract | Address |
 |---|---|---|
-| X Layer testnet (1952) | AuravisMandate | _pending_ |
+| X Layer testnet (1952) | AuravisMandate | [`0x63f18699A8fBa1FD9C9fd194FAF6722Ba50b4A55`](https://www.okx.com/web3/explorer/xlayer-test/address/0x63f18699A8fBa1FD9C9fd194FAF6722Ba50b4A55) |
 | X Layer mainnet (196) | AuravisMandate | _pending_ |
 
 ## Proof transactions
