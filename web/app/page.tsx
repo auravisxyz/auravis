@@ -2,6 +2,8 @@ import { desc } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { activeChain, vaultAddress, network } from "@/lib/chain";
 import { readMandates, amount, type MandateView } from "@/lib/vault";
+import RefreshButton from "./RefreshButton";
+import AutoRefresh from "./AutoRefresh";
 
 // The chain moves; don't serve a stale view of someone's spending limits.
 export const revalidate = 0;
@@ -27,44 +29,61 @@ export default async function Dashboard() {
     dbError = err instanceof Error ? err.message : "Could not reach the database.";
   }
 
+  const active = mandates.filter((m) => m.active);
+  const totalRemaining = active.reduce((sum, m) => sum + (m.lifetimeCap - m.spent), 0n);
+  const explorer = activeChain.blockExplorers?.default.url;
+
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
-      <header className="flex flex-col gap-1 pb-8 sm:flex-row sm:items-baseline sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Auravis</h1>
-          <p className="pt-1 text-sm text-ink-muted">
-            Limits your agent cannot argue its way past.
-          </p>
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-10 lg:py-14">
+      {/* ---- Nav ---------------------------------------------------------- */}
+      <header className="rise flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col">
+          <h1 className="text-lg font-semibold tracking-tight text-ink">Auravis</h1>
+          <p className="text-xs text-ink-faint">Limits your agent cannot argue its way past</p>
         </div>
-        <p className="text-xs text-ink-faint">
-          {activeChain.name} · {network}
-        </p>
+        <div className="flex items-center gap-3">
+          <AutoRefresh />
+          <RefreshButton />
+          <span className="text-xs text-ink-faint">
+            {activeChain.name}
+          </span>
+        </div>
       </header>
 
+      {/* ---- The three numbers that matter -------------------------------- */}
+      <section className="rise rise-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Stat label="Active mandates" value={String(active.length)} />
+        <Stat label="Agent can still spend" value={`$${amount(totalRemaining)}`} />
+        <Stat label="Actions recorded" value={String(executions.length)} />
+      </section>
+
       {!vaultAddress && (
-        <Notice tone="warn">
-          No vault configured. Set <code>NEXT_PUBLIC_MANDATE_ADDRESS_{network.toUpperCase()}</code>{" "}
-          in <code>web/.env.local</code>.
-        </Notice>
+        <p className="note note-warn">
+          No vault configured — set NEXT_PUBLIC_MANDATE_ADDRESS_{network.toUpperCase()} in
+          web/.env.local
+        </p>
       )}
 
-      <section className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-sm font-medium text-ink">Mandates</h2>
-          {vaultAddress && (
+      {/* ---- Mandates ------------------------------------------------------ */}
+      <section className="rise rise-2 flex flex-col gap-3">
+        <div className="flex items-baseline justify-between px-1">
+          <h2 className="text-xs font-medium uppercase tracking-wider text-ink-faint">
+            Mandates
+          </h2>
+          {vaultAddress && explorer && (
             <a
-              href={`${activeChain.blockExplorers?.default.url}/address/${vaultAddress}`}
+              href={`${explorer}/address/${vaultAddress}`}
               target="_blank"
               rel="noreferrer"
-              className="truncate text-xs text-ink-faint underline"
+              className="text-xs text-ink-faint underline-offset-2 transition-colors hover:text-accent-bright hover:underline"
             >
-              {vaultAddress}
+              vault {vaultAddress.slice(0, 6)}…{vaultAddress.slice(-4)} ↗
             </a>
           )}
         </div>
 
         {chainError ? (
-          <Notice tone="danger">{chainError}</Notice>
+          <p className="note note-danger px-1">{chainError}</p>
         ) : mandates.length === 0 ? (
           <Empty
             title="No mandates yet"
@@ -79,39 +98,25 @@ export default async function Dashboard() {
         )}
       </section>
 
-      <section className="flex flex-col gap-3 pt-10">
-        <h2 className="text-sm font-medium text-ink">What it did, and why</h2>
+      {/* ---- The feed ------------------------------------------------------ */}
+      <section className="rise rise-3 flex flex-col gap-3">
+        <h2 className="px-1 text-xs font-medium uppercase tracking-wider text-ink-faint">
+          What it did, and why
+        </h2>
+
         {dbError ? (
-          <Notice tone="danger">{dbError}</Notice>
+          <p className="note note-danger px-1">{dbError}</p>
         ) : executions.length === 0 ? (
           <Empty
             title="Nothing has happened yet"
-            body="Every action and every refusal will be recorded here, in the agent's own words."
+            body="Every action and every refusal is recorded here, in the agent's own words."
           />
         ) : (
-          <ul className="flex flex-col gap-2">
-            {executions.map((e) => (
-              <li
-                key={e.id}
-                className="flex flex-col gap-1 rounded-card border border-line bg-surface p-4"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-xs uppercase tracking-wide text-ink-faint">
-                    mandate {e.mandateId.toString()}
-                  </span>
-                  <StatusPill status={e.status} />
-                </div>
-                {e.reason && <p className="text-sm text-ink-muted">{e.reason}</p>}
-                {e.txHash && (
-                  <a
-                    href={`${activeChain.blockExplorers?.default.url}/tx/${e.txHash}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="truncate text-xs text-accent underline"
-                  >
-                    {e.txHash}
-                  </a>
-                )}
+          <ul className="glass-panel flex flex-col p-2">
+            {executions.map((e, i) => (
+              <li key={e.id}>
+                {i > 0 && <div className="hairline mx-2" />}
+                <FeedEntry entry={e} explorer={explorer} />
               </li>
             ))}
           </ul>
@@ -121,14 +126,18 @@ export default async function Dashboard() {
   );
 }
 
-/**
- * Static width classes, one per twelfth.
- *
- * A progress bar wants a dynamic width, but RULES.md #3 rules out `style={{}}`
- * and arbitrary values. Snapping to twelfths keeps every value a real theme
- * class — imperceptible on a 4px bar, and the exact figures are spelled out in
- * text underneath anyway.
- */
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="glass-panel flex flex-col gap-1 p-5">
+      <span className="text-2xl font-semibold tracking-tight text-ink tabular-nums sm:text-3xl">
+        {value}
+      </span>
+      <span className="text-xs text-ink-faint">{label}</span>
+    </div>
+  );
+}
+
+/** Static twelfth-widths — RULES.md #3 rules out style={{}} and arbitrary values. */
 const FILL_CLASSES = [
   "w-0",
   "w-1/12",
@@ -155,72 +164,99 @@ function MandateCard({ mandate }: { mandate: MandateView }) {
   const remaining = mandate.lifetimeCap - mandate.spent;
 
   return (
-    <li className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4">
+    <li className="glass-panel flex flex-col gap-3 p-5">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-sm text-ink">{mandate.intent || "Untitled mandate"}</p>
+        <p className="line-clamp-2 text-sm text-ink-muted">
+          {mandate.intent || "Untitled mandate"}
+        </p>
         <span
-          className={
-            mandate.active
-              ? "shrink-0 rounded-control bg-surface-raised px-2 py-1 text-xs text-accent"
-              : "shrink-0 rounded-control bg-surface-raised px-2 py-1 text-xs text-ink-faint"
-          }
+          className={`shrink-0 text-xs ${mandate.active ? "text-accent-bright" : "text-ink-faint"}`}
         >
           {mandate.active ? "active" : "closed"}
         </span>
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className="flex items-baseline gap-2">
+        <span className="text-2xl font-semibold tracking-tight text-ink tabular-nums">
+          ${amount(remaining)}
+        </span>
+        <span className="text-xs text-ink-faint">left of ${amount(mandate.lifetimeCap)}</span>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
         <div className="h-1 w-full overflow-hidden rounded-control bg-surface-raised">
           <div className={`h-full bg-accent ${fillClass(mandate.spent, mandate.lifetimeCap)}`} />
         </div>
-        <p className="text-xs text-ink-muted">
-          {amount(mandate.spent)} spent of {amount(mandate.lifetimeCap)} · {amount(remaining)} left
-        </p>
-        <p className="text-xs text-ink-faint">
-          window {amount(mandate.windowSpent)} / {amount(mandate.windowCap)}
+        <p className="text-xs text-ink-faint tabular-nums">
+          window ${amount(mandate.windowSpent)} / ${amount(mandate.windowCap)}
         </p>
       </div>
 
-      <p className="text-xs text-ink-faint">
-        The contract says: <span className="text-ink-muted">{mandate.check.why}</span>
+      <div className="hairline" />
+      <p className={`note ${mandate.check.allowed ? "" : "note-warn"}`}>
+        The contract says: {mandate.check.why}
       </p>
     </li>
   );
 }
 
-function StatusPill({ status }: { status: string }) {
+function FeedEntry({
+  entry,
+  explorer,
+}: {
+  entry: typeof schema.executions.$inferSelect;
+  explorer: string | undefined;
+}) {
   const tone =
-    status === "confirmed"
-      ? "text-accent"
-      : status === "reverted"
-        ? "text-danger"
-        : status === "skipped"
-          ? "text-ink-faint"
-          : "text-warn";
-  return (
-    <span className={`shrink-0 rounded-control bg-surface-raised px-2 py-1 text-xs ${tone}`}>
-      {status}
-    </span>
-  );
-}
+    entry.status === "confirmed"
+      ? "dot-active"
+      : entry.status === "reverted"
+        ? "dot-danger"
+        : entry.status === "skipped"
+          ? "dot-dead"
+          : "dot-fired";
 
-function Empty({ title, body }: { title: string; body: string }) {
   return (
-    <div className="flex flex-col gap-1 rounded-card border border-dashed border-line p-6 text-center">
-      <p className="text-sm text-ink">{title}</p>
-      <p className="text-xs text-ink-muted">{body}</p>
+    <div className="flex flex-col gap-1.5 px-3 py-3">
+      <div className="flex items-center gap-2.5">
+        <span className={`dot ${tone}`} />
+        <span className="text-xs font-medium text-ink">{entry.status}</span>
+        <span className="text-xs text-ink-faint">mandate {entry.mandateId.toString()}</span>
+        <span className="flex-1" />
+        <span className="text-xs text-ink-faint">{relativeTime(entry.createdAt)}</span>
+      </div>
+      {entry.reason && (
+        <p className="pl-4 text-sm leading-relaxed text-ink-muted">{entry.reason}</p>
+      )}
+      {entry.txHash && explorer && (
+        <a
+          href={`${explorer}/tx/${entry.txHash}`}
+          target="_blank"
+          rel="noreferrer"
+          className="pl-4 text-xs text-accent-bright underline-offset-2 hover:underline tabular-nums"
+        >
+          {entry.txHash.slice(0, 10)}…{entry.txHash.slice(-8)} ↗
+        </a>
+      )}
     </div>
   );
 }
 
-function Notice({ tone, children }: { tone: "warn" | "danger"; children: React.ReactNode }) {
+function relativeTime(date: Date): string {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function Empty({ title, body }: { title: string; body: string }) {
   return (
-    <div
-      className={`rounded-card border border-line bg-surface p-4 text-sm ${
-        tone === "danger" ? "text-danger" : "text-warn"
-      }`}
-    >
-      {children}
+    <div className="flex flex-col gap-1 rounded-card border border-dashed border-line p-8 text-center">
+      <p className="text-sm text-ink">{title}</p>
+      <p className="mx-auto max-w-md text-xs text-ink-muted">{body}</p>
     </div>
   );
 }

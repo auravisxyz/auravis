@@ -53,6 +53,9 @@ body {
   background-color: var(--color-canvas-deep);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, Roboto,
+    sans-serif;
 }
 
 body {
@@ -120,9 +123,14 @@ body::before {
   transform: translateY(0);
   filter: brightness(0.97);
 }
+/* Disabled is a different state, not a dimmed copy of enabled — a gradient at
+   35% opacity reads as "broken", a quiet flat pane reads as "not yet". */
 .btn-primary:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
+  background-image: none;
+  background-color: oklch(0.9 0.02 252 / 0.06);
+  color: var(--color-ink-faint);
+  box-shadow: none;
+  cursor: default;
 }
 
 .btn-ghost {
@@ -158,6 +166,81 @@ body::before {
 }
 .field:disabled {
   opacity: 0.55;
+}
+
+/* --- Motion ----------------------------------------------------------------
+   One entrance curve, applied per section with a small stagger. Quality here
+   is restraint: 240ms, small travel, and nothing moves twice. */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.rise-2 {
+  animation-delay: 50ms;
+}
+.rise-3 {
+  animation-delay: 100ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .rise-2,
+  .rise-3 {
+    animation: none;
+  }
+}
+
+/* Hairline divider — hierarchy through space, not more boxes. */
+.hairline {
+  border-top: 1px solid var(--color-edge);
+}
+
+/* One-line quiet notes with a leading tick of colour. Replaces boxed warnings:
+   the information stays, the shouting goes. */
+.note {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--color-ink-faint);
+}
+.note::before {
+  content: "";
+  width: 0.25rem;
+  height: 0.25rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+  transform: translateY(-0.125rem);
+  background-color: var(--color-ink-faint);
+}
+.note-warn {
+  color: var(--color-warn);
+}
+.note-warn::before {
+  background-color: var(--color-warn);
+}
+.note-accent {
+  color: var(--color-accent-bright);
+}
+.note-accent::before {
+  background-color: var(--color-accent-bright);
+}
+.note-danger {
+  color: var(--color-danger);
+}
+.note-danger::before {
+  background-color: var(--color-danger);
 }
 
 /* Status dot for the watch list. */

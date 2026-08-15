@@ -1,4 +1,11 @@
-import { encodeFunctionData, formatUnits, type Address, type Hex } from "viem";
+import {
+  BaseError,
+  ContractFunctionRevertedError,
+  encodeFunctionData,
+  formatUnits,
+  type Address,
+  type Hex,
+} from "viem";
 import { config } from "./config.js";
 import { publicClient } from "./chain.js";
 import { getMandate, executeMandate } from "./mandate.js";
@@ -113,15 +120,70 @@ export async function executeAuto(mandateId: bigint, amountIn: bigint): Promise<
     }
     return { ok: true, txHash, reason: `Swapped ${human} ${route.description}.` };
   } catch (err) {
-    // executeMandate simulates first, so contract refusals land here with the
-    // decoded custom error (ExceedsWindowCap, ReceivedLessThanMinimum, …).
-    // That name IS the explanation — surface it, don't bury it.
-    const message =
-      err instanceof Error
-        ? "shortMessage" in err && typeof (err as { shortMessage?: unknown }).shortMessage === "string"
-          ? (err as { shortMessage: string }).shortMessage
-          : err.message
-        : String(err);
-    return { ok: false, reason: `The chain refused: ${message.slice(0, 280)}` };
+    return { ok: false, reason: `The chain refused: ${describeRefusal(err)}` };
+  }
+}
+
+/**
+ * Turn a revert into a sentence a person can read.
+ *
+ * viem buries the decoded custom error two levels down (`shortMessage` alone
+ * yields the useless 'The contract function "execute" reverted.'). Walk to the
+ * ContractFunctionRevertedError, take the error NAME and ARGS, and translate
+ * the ones our contract actually throws. The refusal explaining itself is the
+ * product's defining feature — this string IS the demo's kill-shot copy.
+ */
+function describeRefusal(err: unknown): string {
+  if (err instanceof BaseError) {
+    const revert = err.walk((e) => e instanceof ContractFunctionRevertedError);
+    if (revert instanceof ContractFunctionRevertedError && revert.data) {
+      return humanizeError(revert.data.errorName, revert.data.args);
+    }
+    return err.shortMessage.slice(0, 280);
+  }
+  return (err instanceof Error ? err.message : String(err)).slice(0, 280);
+}
+
+function humanizeError(name: string, args: readonly unknown[] | undefined): string {
+  // All amounts in this build are 6-decimal stablecoins.
+  const fmt = (v: unknown): string => {
+    try {
+      return formatUnits(BigInt(v as string | number | bigint), 6);
+    } catch {
+      return String(v);
+    }
+  };
+
+  switch (name) {
+    case "ReceivedLessThanMinimum":
+      return (
+        `the router offered too little — your floor requires ${fmt(args?.[0])}, ` +
+        `it offered ${fmt(args?.[1])}. The price floor held.`
+      );
+    case "ExceedsLifetimeCap":
+      return (
+        `it would break the mandate's total cap — asked for ${fmt(args?.[0])}, ` +
+        `only ${fmt(args?.[1])} remains. The cap held.`
+      );
+    case "ExceedsWindowCap":
+      return (
+        `it would break this window's rate limit — asked for ${fmt(args?.[0])}, ` +
+        `only ${fmt(args?.[1])} is allowed right now. The rate limit held.`
+      );
+    case "SpentMoreThanDeclared":
+      return (
+        `the router tried to take more than declared — declared ${fmt(args?.[0])}, ` +
+        `attempted ${fmt(args?.[1])}. Caught by the balance check and reverted.`
+      );
+    case "RouterNotAllowed":
+      return `router ${String(args?.[0] ?? "").slice(0, 10)}… is not on the owner's allowlist.`;
+    case "MandateInactive":
+      return "the mandate has been revoked or exhausted.";
+    case "MandateExpired":
+      return "the mandate has expired.";
+    case "NotAgent":
+      return "the caller is not the authorised agent key.";
+    default:
+      return `${name}${args?.length ? `(${args.map(String).join(", ")})` : ""}`;
   }
 }

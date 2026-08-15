@@ -38,6 +38,14 @@ function isTradeablePage(url: string): boolean {
   }
 }
 
+function hostname(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
 type Stage =
   | "capturing"
   | "ready"
@@ -128,7 +136,6 @@ export default function App() {
       } finally {
         clearTimeout(timeout);
       }
-      // Non-OK response falls through to the local extractor.
       setDraft(await extractor.extract(capture, text));
       setStage("review");
     } catch {
@@ -241,7 +248,7 @@ export default function App() {
   }
 
   return (
-    <main className="flex flex-col gap-3 p-4">
+    <main className="flex flex-col gap-4 p-5">
       <Header />
 
       {stage === "capturing" && <Capturing />}
@@ -279,18 +286,32 @@ export default function App() {
   );
 }
 
+/**
+ * The wordmark is the way home. Without this, the dashboard is a URL nobody
+ * has — the extension is the front door, so the front door gets the signpost.
+ */
 function Header() {
   return (
-    <header className="flex items-center justify-between px-1">
-      <h1 className="text-base font-semibold tracking-tight text-ink">Auravis</h1>
-      <span className="glass-inset px-2 py-0.5 text-xs text-ink-faint">Testnet</span>
+    <header className="flex items-baseline justify-between px-1">
+      <button
+        type="button"
+        onClick={() => void browser.tabs.create({ url: APP_URL })}
+        title="Open your Auravis dashboard"
+        className="group flex items-baseline gap-1.5 text-sm font-semibold tracking-tight text-ink"
+      >
+        Auravis
+        <span className="text-xs text-ink-faint transition-colors group-hover:text-accent-bright">
+          ↗ dashboard
+        </span>
+      </button>
+      <span className="text-xs text-ink-faint">Testnet</span>
     </header>
   );
 }
 
 function Capturing() {
   return (
-    <div className="glass-panel flex items-center gap-3 p-4">
+    <div className="glass-panel rise flex items-center gap-3 p-5">
       <span className="size-2 animate-pulse rounded-full bg-accent-bright" />
       <p className="text-sm text-ink-muted">Reading this page…</p>
     </div>
@@ -299,81 +320,78 @@ function Capturing() {
 
 function ErrorState({ message, onRetry }: { message: string | null; onRetry: () => void }) {
   return (
-    <div className="glass-panel flex flex-col gap-3 p-4">
-      <p className="text-sm text-danger">{message ?? "Something went wrong."}</p>
-      <button type="button" onClick={onRetry} className="btn-ghost px-3 py-2 text-sm">
+    <div className="glass-panel rise flex flex-col gap-4 p-5">
+      <p className="note note-danger">{message ?? "Something went wrong."}</p>
+      <button type="button" onClick={onRetry} className="btn-ghost px-3 py-2.5 text-sm">
         Try again
       </button>
     </div>
   );
 }
 
+/**
+ * One panel, one hero. The price is the only large thing on screen; every
+ * caveat is a single quiet line under a hairline. Warnings inform — they
+ * don't get boxes to shout from.
+ */
 function CaptureCard({ capture }: { capture: PageCapture }) {
-  return (
-    <section className="glass-panel flex flex-col gap-2 p-4">
-      <p className="line-clamp-2 text-sm font-medium text-ink">
-        {capture.title || "Untitled page"}
-      </p>
-      <p className="truncate text-xs text-ink-faint">{capture.url}</p>
+  const price = capture.primaryPrice;
+  const extra = capture.extraCosts;
+  const shipping = extra?.shipping;
+  const symbol = price?.raw.match(/[$£€¥]/)?.[0];
+  const landed = price && shipping ? price.value + shipping.value : null;
 
-      {capture.primaryPrice ? (
-        <div className="flex flex-col gap-2 pt-1">
-          <div className="flex items-baseline gap-2">
-            <span className="text-xl font-semibold text-ink">{capture.primaryPrice.raw}</span>
-            <span className="text-xs text-ink-faint">{capture.primaryPrice.currency}</span>
+  return (
+    <section className="glass-panel rise flex flex-col gap-3 p-5">
+      <div className="flex flex-col gap-1">
+        <p className="text-xs font-medium uppercase tracking-wider text-ink-faint">
+          {hostname(capture.url)}
+        </p>
+
+        {price ? (
+          <div className="flex items-baseline gap-2 pt-1">
+            <span className="text-3xl font-semibold tracking-tight text-ink tabular-nums">
+              {price.raw}
+            </span>
+            {!symbol && <span className="text-sm text-ink-faint">{price.currency}</span>}
             {capture.availability === "out-of-stock" && (
-              <span className="glass-inset px-2 py-0.5 text-xs text-warn">out of stock</span>
+              <span className="text-xs text-warn">out of stock</span>
             )}
           </div>
-          {capture.primaryPrice.source === "guessed" ? (
-            <p className="text-xs text-warn">
-              This page didn&apos;t state its price clearly — check it&apos;s the right one.
-            </p>
-          ) : (
-            <p className="text-xs text-ink-faint">Read from the page&apos;s own product data.</p>
-          )}
-          <ExtraCostsNote capture={capture} />
-        </div>
-      ) : (
-        <p className="pt-1 text-xs text-ink-faint">
-          No price found on this page — you can still name one yourself.
-        </p>
-      )}
-    </section>
-  );
-}
+        ) : (
+          <p className="pt-1 text-lg font-medium tracking-tight text-ink">
+            {capture.title || "Untitled page"}
+          </p>
+        )}
 
-function ExtraCostsNote({ capture }: { capture: PageCapture }) {
-  const extra = capture.extraCosts;
-  const price = capture.primaryPrice;
-  if (!extra || !price) return null;
-
-  const shipping = extra.shipping;
-  const symbol = price.raw.match(/[$£€¥]/)?.[0] ?? "";
-
-  if (shipping) {
-    const landed = price.value + shipping.value;
-    return (
-      <div className="glass-inset flex flex-col gap-1 p-2">
-        <p className="text-xs text-ink">
-          About {symbol}
-          {landed.toFixed(2)} delivered{extra.taxAtCheckout && ", before tax"}
-        </p>
-        <p className="text-xs text-ink-faint">
-          {price.raw} item + {shipping.raw} delivery
-        </p>
+        {price && (
+          <p className="line-clamp-1 text-sm text-ink-muted">{capture.title || "Untitled page"}</p>
+        )}
       </div>
-    );
-  }
 
-  return (
-    <div className="glass-inset p-2">
-      <p className="text-xs text-ink-muted">
-        {extra.taxAtCheckout
-          ? "Delivery and tax are added at checkout, so you'll pay more than this."
-          : "Delivery and tax aren't included in this price."}
-      </p>
-    </div>
+      <div className="hairline" />
+
+      <div className="flex flex-col gap-1.5">
+        {landed !== null ? (
+          <p className="note">
+            About {symbol ?? ""}
+            {landed.toFixed(2)} delivered{extra?.taxAtCheckout && ", before tax"}
+          </p>
+        ) : price && extra ? (
+          <p className="note">
+            {extra.taxAtCheckout
+              ? "Delivery and tax added at checkout"
+              : "Delivery and tax not included"}
+          </p>
+        ) : null}
+
+        {price?.source === "guessed" && (
+          <p className="note note-warn">Price guessed from page text — check it&apos;s the right one</p>
+        )}
+
+        {!price && <p className="note">No price found — name one in your instruction</p>}
+      </div>
+    </section>
   );
 }
 
@@ -389,24 +407,24 @@ function InstructionField({
   busy: boolean;
 }) {
   return (
-    <section className="flex flex-col gap-2">
-      <label htmlFor="instruction" className="px-1 text-sm text-ink-muted">
+    <section className="rise rise-2 flex flex-col gap-2.5">
+      <label htmlFor="instruction" className="px-1 text-xs font-medium text-ink-muted">
         What should happen?
       </label>
       <textarea
         id="instruction"
-        rows={3}
+        rows={2}
         value={value}
         disabled={busy}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="tell me if it drops 8% · buy $200 worth if it hits $40"
-        className="field resize-none p-3 text-sm"
+        placeholder="buy $200 worth if it drops 8%"
+        className="field resize-none p-3.5 text-sm leading-relaxed"
       />
       <button
         type="button"
         disabled={busy || value.trim().length === 0}
         onClick={onSubmit}
-        className="btn-primary px-3 py-2.5 text-sm"
+        className="btn-primary px-3 py-3 text-sm"
       >
         {busy ? "Reading…" : "Continue"}
       </button>
@@ -416,13 +434,9 @@ function InstructionField({
 
 /**
  * The review screen decides which of the two promises we can honestly make:
- *
- *  - Watch: any page, no wallet, checked from this browser. Always available
- *    when there's a usable target.
- *  - Watch & Buy: only where the asset is genuinely on-chain. Offering a
- *    purchase on an ordinary shop would promise something we cannot do, so on
- *    those pages a buy instruction downgrades to a watch — with the reason
- *    stated, not hidden.
+ * Watch (any page, no wallet) or Watch & Buy (on-chain assets only). On an
+ * ordinary shop a buy instruction downgrades to a watch, with the reason
+ * stated in one quiet line rather than hidden.
  */
 function ReviewCard({
   draft,
@@ -456,113 +470,146 @@ function ReviewCard({
   const delivered = price && shipping !== null ? price.value + shipping : null;
   const symbol = price?.raw.match(/[$£€¥]/)?.[0] ?? "$";
 
-  // Percent targets need a baseline to mean anything.
   const percentWithoutPrice = draft.targetPercent !== null && !price;
   const watchBlocked = !hasTarget || percentWithoutPrice || unsure;
   const mandateBlocked = watchBlocked || !wantsToBuy;
 
-  // "8% below the $60.99 you saw today → alerts at $56.11"
+  // The hero: the one number this decision is about.
+  const hero =
+    draft.amount !== null
+      ? `$${draft.amount}`
+      : draft.targetPrice !== null
+        ? `${symbol}${draft.targetPrice}`
+        : draft.targetPercent !== null
+          ? `${draft.targetPercent}%`
+          : "—";
+  const heroCaption =
+    draft.amount !== null
+      ? wantsToBuy && tradeable
+        ? "to spend, capped on-chain"
+        : "to spend, once you confirm"
+      : draft.direction === "below"
+        ? "drop to watch for"
+        : "rise to watch for";
+
   let targetLine: string | null = null;
   if (draft.targetPercent !== null && price) {
     const fireAt =
       draft.direction === "below"
         ? price.value * (1 - draft.targetPercent / 100)
         : price.value * (1 + draft.targetPercent / 100);
-    targetLine = `${draft.targetPercent}% ${draft.direction === "below" ? "below" : "above"} the ${price.raw} you see today — alerts at ${symbol}${fireAt.toFixed(2)}.`;
+    targetLine = `${draft.targetPercent}% ${draft.direction === "below" ? "below" : "above"} the ${price.raw} you see today — alerts at ${symbol}${fireAt.toFixed(2)}`;
   } else if (draft.targetPrice !== null) {
     targetLine =
       basis === "delivered" && delivered !== null
-        ? `Watching the delivered price (about ${symbol}${delivered.toFixed(2)} right now) until it goes ${draft.direction} ${symbol}${draft.targetPrice}.`
-        : `Watching the listed price until it goes ${draft.direction} ${symbol}${draft.targetPrice}.`;
+        ? `Watching the delivered price (about ${symbol}${delivered.toFixed(2)} now) until it goes ${draft.direction} ${symbol}${draft.targetPrice}`
+        : `Watching the listed price until it goes ${draft.direction} ${symbol}${draft.targetPrice}`;
   }
 
   return (
-    <section className="flex flex-col gap-3">
-      <div className="glass-panel flex flex-col gap-2 p-4">
-        <p className="text-sm text-ink">{draft.summary}</p>
-        {targetLine && <p className="text-xs text-accent-bright">{targetLine}</p>}
-        {basis === "delivered" && delivered === null && draft.targetPrice !== null && (
-          <p className="text-xs text-warn">
-            Couldn&apos;t read delivery cost here, so this watches the listed price instead.
-          </p>
+    <section className="flex flex-col gap-4">
+      <div className="glass-panel rise flex flex-col gap-3 p-5">
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-semibold tracking-tight text-ink tabular-nums">
+              {hero}
+            </span>
+            <span className="text-xs text-ink-faint">{heroCaption}</span>
+          </div>
+          <p className="line-clamp-2 text-sm text-ink-muted">{draft.summary}</p>
+        </div>
+
+        {(targetLine ||
+          draft.assumptions.length > 0 ||
+          (wantsToBuy && !tradeable) ||
+          (basis === "delivered" && delivered === null && draft.targetPrice !== null)) && (
+          <>
+            <div className="hairline" />
+            <div className="flex flex-col gap-1.5">
+              {targetLine && <p className="note note-accent">{targetLine}</p>}
+
+              {basis === "delivered" && delivered === null && draft.targetPrice !== null && (
+                <p className="note note-warn">
+                  Couldn&apos;t read delivery cost here — watching the listed price instead
+                </p>
+              )}
+
+              {wantsToBuy && !tradeable && (
+                <p className="note">
+                  Can&apos;t buy from this shop — I&apos;ll watch it and tell you the moment it
+                  hits, so you buy in one click
+                </p>
+              )}
+
+              {draft.assumptions.map((a) => (
+                <p key={a} className="note">
+                  {a}
+                </p>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
-      {draft.assumptions.length > 0 && (
-        <div className="glass-panel flex flex-col gap-2 p-4">
-          <p className="text-xs font-medium text-warn">What I filled in for you</p>
-          <ul className="flex flex-col gap-1">
-            {draft.assumptions.map((a) => (
-              <li key={a} className="text-xs text-ink-muted">
-                {a}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {wantsToBuy && !tradeable && (
-        <div className="glass-inset p-3">
-          <p className="text-xs text-ink-muted">
-            I can&apos;t buy from this shop — no payment rails reach it. I can watch it from
-            your browser and tell you the moment it hits your price, so you buy it yourself
-            in one click.
+      <div className="rise rise-2 flex flex-col gap-2.5">
+        {watchBlocked && (
+          <p className="note note-warn px-1">
+            {!hasTarget && "Name a price or a percentage so I know when to act"}
+            {percentWithoutPrice &&
+              "A percentage needs today's price as a baseline — use an absolute price here"}
+            {unsure && hasTarget && !percentWithoutPrice && "I'm not confident I understood — try rephrasing"}
           </p>
-        </div>
-      )}
+        )}
 
-      {watchBlocked && (
-        <p className="px-1 text-xs text-warn">
-          {!hasTarget && "I couldn't tell when to act — name a price or a percentage. "}
-          {percentWithoutPrice &&
-            "A percentage needs today's price as a baseline, and this page didn't give one — use an absolute price instead. "}
-          {unsure && hasTarget && !percentWithoutPrice && "I'm not confident I understood that — try rephrasing. "}
-        </p>
-      )}
+        {actionError && <p className="note note-danger px-1">{actionError}</p>}
 
-      {actionError && <p className="px-1 text-xs text-danger">{actionError}</p>}
-
-      <div className="flex gap-2">
-        <button type="button" onClick={onBack} disabled={busy} className="btn-ghost flex-1 px-3 py-2.5 text-sm">
-          Back
-        </button>
-        {wantsToBuy && tradeable ? (
+        <div className="flex gap-2">
           <button
             type="button"
-            disabled={mandateBlocked || busy}
-            onClick={onMandate}
-            className="btn-primary flex-1 px-3 py-2.5 text-sm"
+            onClick={onBack}
+            disabled={busy}
+            className="btn-ghost flex-1 px-3 py-3 text-sm"
           >
-            {busy ? "Opening…" : "Create mandate"}
+            Back
           </button>
-        ) : (
+          {wantsToBuy && tradeable ? (
+            <button
+              type="button"
+              disabled={mandateBlocked || busy}
+              onClick={onMandate}
+              className="btn-primary flex-1 px-3 py-3 text-sm"
+            >
+              {busy ? "Opening…" : "Create mandate"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={watchBlocked || busy}
+              onClick={onWatch}
+              className="btn-primary flex-1 px-3 py-3 text-sm"
+            >
+              {busy ? "Saving…" : "Start watching"}
+            </button>
+          )}
+        </div>
+
+        {wantsToBuy && tradeable && (
           <button
             type="button"
             disabled={watchBlocked || busy}
             onClick={onWatch}
-            className="btn-primary flex-1 px-3 py-2.5 text-sm"
+            className="btn-ghost px-3 py-2 text-xs"
           >
-            {busy ? "Saving…" : "Start watching"}
+            Just watch it instead
           </button>
         )}
+
+        <p className="px-1 text-center text-xs text-ink-faint">
+          {wantsToBuy && tradeable
+            ? "The cap is enforced on-chain — the agent cannot spend past it"
+            : "Watched from your browser. This page never leaves your machine"}
+        </p>
       </div>
-
-      {wantsToBuy && tradeable && (
-        <button
-          type="button"
-          disabled={watchBlocked || busy}
-          onClick={onWatch}
-          className="btn-ghost px-3 py-2 text-xs"
-        >
-          Just watch it instead
-        </button>
-      )}
-
-      <p className="px-1 text-center text-xs text-ink-faint">
-        {wantsToBuy && tradeable
-          ? "The cap is enforced on-chain. The agent cannot spend past it."
-          : "Watching happens in your browser. This page never leaves your machine."}
-      </p>
     </section>
   );
 }
@@ -570,26 +617,34 @@ function ReviewCard({
 function WatchDone({ watch, onClose }: { watch: Watch; onClose: () => void }) {
   const target = targetValue(watch);
   return (
-    <section className="glass-panel flex flex-col gap-3 p-5">
-      <div className="flex items-center gap-2">
-        <span className="dot dot-active" />
-        <h2 className="text-base font-medium text-ink">Consider it watched</h2>
-      </div>
-      <p className="text-sm text-ink-muted">{watch.title}</p>
+    <section className="glass-panel rise flex flex-col items-center gap-3 p-6 text-center">
+      <span className="dot dot-active" />
+      <h2 className="text-lg font-semibold tracking-tight text-ink">Consider it watched</h2>
+      <p className="line-clamp-2 text-sm text-ink-muted">{watch.title}</p>
       {target !== null && (
-        <p className="text-xs text-accent-bright">
+        <p className="note note-accent">
           You&apos;ll hear from me when the {watch.basis === "delivered" ? "delivered " : ""}
           price goes {watch.direction} {watch.currency === "USD" ? "$" : ""}
-          {target.toFixed(2)}.
+          {target.toFixed(2)}
         </p>
       )}
-      <p className="text-xs text-ink-faint">
-        Checked every 30 minutes from this browser — your region, your prices. Nothing about
-        this page leaves your machine.
+      <p className="text-xs leading-relaxed text-ink-faint">
+        Checked every 30 minutes from this browser — your region, your prices.
+        <br />
+        Nothing about this page leaves your machine.
       </p>
-      <button type="button" onClick={onClose} className="btn-primary px-3 py-2.5 text-sm">
-        Done
-      </button>
+      <div className="flex w-full gap-2">
+        <button
+          type="button"
+          onClick={() => void browser.tabs.create({ url: APP_URL })}
+          className="btn-ghost flex-1 px-3 py-3 text-sm"
+        >
+          Open dashboard
+        </button>
+        <button type="button" onClick={onClose} className="btn-primary flex-1 px-3 py-3 text-sm">
+          Done
+        </button>
+      </div>
     </section>
   );
 }
@@ -605,27 +660,32 @@ function WatchList({
   if (visible.length === 0) return null;
 
   return (
-    <section className="glass-panel flex flex-col gap-2 p-3">
-      <p className="px-1 text-xs font-medium text-ink-muted">Watching ({visible.length})</p>
-      <ul className="flex flex-col gap-1">
-        {visible.map((w) => (
-          <li key={w.id} className="flex items-center gap-2 rounded-control px-1 py-1">
-            <span className={`dot ${w.status === "fired" ? "dot-fired" : "dot-active"}`} />
-            <span className="min-w-0 flex-1 truncate text-xs text-ink">{w.title}</span>
-            {w.lastSeenPrice !== null && (
-              <span className="shrink-0 text-xs text-ink-faint">
-                {w.currency === "USD" ? "$" : ""}
-                {w.lastSeenPrice.toFixed(2)}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => onCancel(w.id)}
-              aria-label={`Stop watching ${w.title}`}
-              className="shrink-0 px-1 text-xs text-ink-faint hover:text-danger"
-            >
-              ✕
-            </button>
+    <section className="rise rise-3 flex flex-col gap-2">
+      <p className="px-1 text-xs font-medium uppercase tracking-wider text-ink-faint">
+        Watching · {visible.length}
+      </p>
+      <ul className="glass-panel flex flex-col p-2">
+        {visible.map((w, i) => (
+          <li key={w.id}>
+            {i > 0 && <div className="hairline mx-1" />}
+            <div className="flex items-center gap-2.5 px-2 py-2">
+              <span className={`dot ${w.status === "fired" ? "dot-fired" : "dot-active"}`} />
+              <span className="min-w-0 flex-1 truncate text-sm text-ink">{w.title}</span>
+              {w.lastSeenPrice !== null && (
+                <span className="shrink-0 text-xs text-ink-faint tabular-nums">
+                  {w.currency === "USD" ? "$" : ""}
+                  {w.lastSeenPrice.toFixed(2)}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => onCancel(w.id)}
+                aria-label={`Stop watching ${w.title}`}
+                className="shrink-0 px-1.5 text-xs text-ink-faint transition-colors hover:text-danger"
+              >
+                ✕
+              </button>
+            </div>
           </li>
         ))}
       </ul>
