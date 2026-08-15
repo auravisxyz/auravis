@@ -1,46 +1,179 @@
 @import "tailwindcss";
 
 /**
- * Design tokens. Every colour, radius and size used anywhere in the extension
- * resolves to something defined here — see RULES.md #3. If a component needs a
- * value that isn't in this list, the value gets added here rather than inlined
- * at the call site, so the dashboard can share the same vocabulary.
+ * Design tokens — the single vocabulary for every surface (RULES.md #3).
+ *
+ * Palette intent:
+ *   - Deep blue-black canvas with a soft aurora glow: calm, capable, AI.
+ *   - Electric blue accent: the "confidence" colour. All actions are blue.
+ *   - Red (--color-signal) is RESERVED. It appears only when the chain refuses
+ *     something — the product's defining moment. Using it for anything routine
+ *     would cheapen the one beat the demo is built around. Errors use danger,
+ *     which is tuned duller than signal on purpose.
+ *
+ * Glass: surfaces carry alpha and get backdrop blur via .glass-panel below.
+ * Token NAMES are shared with web/app/globals.css — keep values in sync.
  */
 @theme {
-  --color-canvas: oklch(0.17 0.012 265);
-  --color-surface: oklch(0.22 0.014 265);
-  --color-surface-raised: oklch(0.26 0.016 265);
-  --color-line: oklch(0.32 0.018 265);
+  --color-canvas: oklch(0.14 0.03 252);
+  --color-canvas-deep: oklch(0.11 0.024 258);
 
-  --color-ink: oklch(0.97 0.004 265);
-  --color-ink-muted: oklch(0.72 0.012 265);
-  --color-ink-faint: oklch(0.58 0.012 265);
+  /* Translucent panes — the glass itself. */
+  --color-surface: oklch(0.32 0.05 252 / 0.4);
+  --color-surface-raised: oklch(0.42 0.055 252 / 0.42);
+  --color-line: oklch(0.75 0.05 252 / 0.18);
+  --color-edge: oklch(0.92 0.03 252 / 0.14);
 
-  /* Aurora green — the "it's watching, it's fine" colour. */
-  --color-accent: oklch(0.78 0.17 155);
-  --color-accent-ink: oklch(0.18 0.03 155);
+  --color-ink: oklch(0.97 0.008 252);
+  --color-ink-muted: oklch(0.79 0.022 252);
+  --color-ink-faint: oklch(0.6 0.028 252);
 
-  --color-warn: oklch(0.82 0.15 85);
+  /* Confident electric blue. */
+  --color-accent: oklch(0.64 0.2 256);
+  --color-accent-bright: oklch(0.76 0.15 248);
+  --color-accent-deep: oklch(0.48 0.21 262);
+  --color-accent-ink: oklch(0.98 0.008 250);
+  --color-accent-glow: oklch(0.6 0.2 256 / 0.35);
+
+  /* Reserved: the chain saying no. */
+  --color-signal: oklch(0.6 0.24 22);
+  --color-signal-glow: oklch(0.6 0.24 22 / 0.3);
+
+  --color-warn: oklch(0.83 0.14 85);
   --color-danger: oklch(0.68 0.19 25);
 
-  --radius-card: 0.75rem;
-  --radius-control: 0.5rem;
+  --radius-card: 1rem;
+  --radius-control: 0.625rem;
 
-  --width-popup: 22rem;
+  --width-popup: 23rem;
 }
 
 html,
 body {
-  background-color: var(--color-canvas);
+  background-color: var(--color-canvas-deep);
   color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* The popup has a fixed width by nature, so the four-viewport rule in RULES.md
-   #2 applies to the dashboard rather than here. Height still needs to breathe:
-   browsers cap popups around 600px, so the body scrolls rather than clipping. */
 body {
   width: var(--width-popup);
   margin: 0;
   max-height: 37.5rem;
   overflow-y: auto;
+  position: relative;
+}
+
+/* The light behind the glass. Without something glowing back there, alpha
+   surfaces just read as grey — this is what makes the blur worth having. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(28rem 20rem at 85% -5%, var(--color-accent-glow), transparent 60%),
+    radial-gradient(22rem 16rem at -10% 45%, oklch(0.5 0.16 280 / 0.22), transparent 65%),
+    radial-gradient(30rem 22rem at 55% 115%, oklch(0.55 0.14 230 / 0.18), transparent 60%);
+}
+
+/* --- Glass building blocks -------------------------------------------------
+   Component classes, defined once from tokens (the "global styling is better"
+   rule). Anything used more than twice belongs here, not repeated in JSX. */
+
+.glass-panel {
+  background-color: var(--color-surface);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid var(--color-edge);
+  border-radius: var(--radius-card);
+  box-shadow:
+    0 8px 32px oklch(0.08 0.03 258 / 0.4),
+    inset 0 1px 0 oklch(0.95 0.02 252 / 0.09);
+}
+
+.glass-inset {
+  background-color: var(--color-surface-raised);
+  border: 1px solid var(--color-edge);
+  border-radius: var(--radius-control);
+}
+
+.btn-primary {
+  background-image: linear-gradient(135deg, var(--color-accent-deep), var(--color-accent) 55%, var(--color-accent-bright));
+  color: var(--color-accent-ink);
+  border: none;
+  border-radius: var(--radius-control);
+  font-weight: 500;
+  box-shadow:
+    0 4px 18px var(--color-accent-glow),
+    inset 0 1px 0 oklch(1 0 0 / 0.22);
+  transition: filter 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow:
+    0 6px 24px var(--color-accent-glow),
+    inset 0 1px 0 oklch(1 0 0 / 0.25);
+}
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  filter: brightness(0.97);
+}
+.btn-primary:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  background-color: oklch(0.9 0.02 252 / 0.05);
+  color: var(--color-ink);
+  border: 1px solid var(--color-edge);
+  border-radius: var(--radius-control);
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+.btn-ghost:hover:not(:disabled) {
+  background-color: oklch(0.9 0.02 252 / 0.1);
+  border-color: var(--color-line);
+}
+.btn-ghost:disabled {
+  opacity: 0.4;
+}
+
+/* Inputs sit *in* the glass, slightly darker than it. */
+.field {
+  background-color: oklch(0.16 0.03 254 / 0.55);
+  border: 1px solid var(--color-edge);
+  border-radius: var(--radius-control);
+  color: var(--color-ink);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.field::placeholder {
+  color: var(--color-ink-faint);
+}
+.field:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-glow);
+}
+.field:disabled {
+  opacity: 0.55;
+}
+
+/* Status dot for the watch list. */
+.dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+.dot-active {
+  background-color: var(--color-accent-bright);
+  box-shadow: 0 0 6px var(--color-accent-glow);
+}
+.dot-fired {
+  background-color: var(--color-warn);
+}
+.dot-dead {
+  background-color: var(--color-ink-faint);
 }

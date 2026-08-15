@@ -18,12 +18,59 @@ export type Hex = `0x${string}`;
  * intent so we can always show the user what we actually saw, and so a bad
  * extraction can be re-run against the original without re-visiting the page.
  */
+/**
+ * The page's actual price, and where we got it.
+ *
+ * `source` matters: a price from structured data (JSON-LD, microdata) is the
+ * page telling us what it costs, while a regex match is us guessing from text
+ * that also contains shipping, variants and related items. The UI shows lower
+ * confidence differently, because "we guessed" and "the page told us" should
+ * not look identical to someone about to commit money.
+ */
+export interface PagePrice {
+  value: number;
+  currency: string;
+  raw: string;
+  source: "json-ld" | "microdata" | "meta" | "guessed";
+}
+
+/**
+ * Costs that sit on top of the listed price.
+ *
+ * The number a shop advertises is rarely the number you pay. On the Amazon
+ * listing this was built against, shipping and import charges added $29.92 to
+ * a $60.99 item — a price-drop alert ignoring that is misleading, not merely
+ * incomplete.
+ *
+ * Tax is deliberately absent: it's computed at checkout against an address we
+ * don't have and shouldn't ask for. We say it's excluded rather than pretend
+ * to a precision we can't reach.
+ */
+export interface ExtraCosts {
+  /** Detected shipping / delivery / import charge, if the page states one. */
+  shipping?: { value: number; raw: string };
+  /** True when the page mentions tax is added later. */
+  taxAtCheckout: boolean;
+}
+
+/**
+ * Whether the thing can currently be bought at all. A price alert on a
+ * sold-out item sends someone to a page they can't act on — worse than
+ * saying nothing.
+ */
+export type Availability = "in-stock" | "out-of-stock" | "unknown";
+
 export interface PageCapture {
   url: string;
   title: string;
   /** Visible text, trimmed. Not the full DOM — we only need enough to reason. */
   excerpt: string;
-  /** Any price-looking strings found, in source order. */
+  /** Our best single answer for what this page costs. */
+  primaryPrice?: PagePrice;
+  /** What the listed price doesn't include. */
+  extraCosts?: ExtraCosts;
+  availability?: Availability;
+  /** Everything price-shaped we saw, in source order. Kept for the "not this one?" case. */
   priceCandidates: string[];
   /** Open Graph / product image, if the page offers one. */
   imageUrl?: string;
@@ -36,6 +83,27 @@ export interface PageCapture {
 
 export type TriggerDirection = "below" | "above";
 export type ExecutionMode = "catch" | "auto";
+
+/**
+ * Which number a trigger actually tracks.
+ *
+ * These are not interchangeable, and picking one globally gets it wrong half
+ * the time:
+ *
+ *  - "drops 8%" is a discount on the *item*. Shipping doesn't fall with it, so
+ *    watching the delivered total means a genuine 8% sale may never fire.
+ *  - "under $50" is a statement about what the user will *pay*. Watching the
+ *    item price alerts them at $50 when the real cost is $80.
+ *
+ * So the basis follows the phrasing, and the UI says which one out loud.
+ */
+export type WatchBasis = "item" | "delivered";
+
+export function basisForTarget(hasPercent: boolean, hasAbsolute: boolean): WatchBasis {
+  if (hasPercent && !hasAbsolute) return "item";
+  if (hasAbsolute) return "delivered";
+  return "item";
+}
 
 /**
  * The structured form of "buy $200 worth if it drops 8%".
