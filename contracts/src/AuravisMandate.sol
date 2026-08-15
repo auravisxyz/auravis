@@ -18,7 +18,19 @@ pragma solidity ^0.8.24;
  *        3. The agent can only call routers the user allowlisted.
  *        4. Token approvals are granted for the exact amount and reset to zero after.
  *        5. The user can revoke or withdraw at any moment, without the agent's cooperation.
- *        6. The agent never holds custody. Funds live here; output goes to the user.
+ *        6. The agent never holds custody. Funds and swap output stay in this
+ *           contract, withdrawable only by the owner.
+ *        7. Every spend must return value *to this contract*, at no worse than a
+ *           price floor the owner set when opening the mandate. The agent chooses
+ *           the route; it does not get a say in the floor.
+ *
+ *      WHY 7 EXISTS. An earlier version let the agent pass `minOut` per call.
+ *      That looked like slippage protection but wasn't: `swapData` encodes the
+ *      swap's recipient, so a compromised agent could point the output at its own
+ *      address and pass `minOut = 0`. Spend stayed under the cap and the check
+ *      passed vacuously — capping the *rate* of theft rather than preventing it.
+ *      The floor now comes from owner-set mandate state and is measured against
+ *      this contract's own balance delta, so redirected output reverts.
  */
 contract AuravisMandate {
     // ---------------------------------------------------------------------
@@ -38,6 +50,7 @@ contract AuravisMandate {
     error ZeroAmount();
     error Reentrancy();
     error TransferFailed();
+    error ExpiryInPast();
 
     // ---------------------------------------------------------------------
     // Events — the dashboard's "what I did and why" feed reads directly from these.
@@ -50,6 +63,7 @@ contract AuravisMandate {
         uint256 windowCap,
         uint64 windowLength,
         uint64 expiry,
+        uint256 minOutPerUnit,
         string intent
     );
     event MandateExecuted(
@@ -92,7 +106,15 @@ contract AuravisMandate {
         uint64  expiry;          // mandate dies at this timestamp
         bool    active;          // false once revoked or exhausted
         string  intent;          // the user's own words, kept for the audit trail
+        /// @dev Price floor, set by the owner, never by the agent: the minimum
+        ///      buyToken base units this contract must receive per 1e18 base
+        ///      units of spendToken spent. Set 0 only to waive the floor
+        ///      entirely (test/demo use — see openMandate).
+        uint256 minOutPerUnit;
     }
+
+    /// @dev Fixed-point scale for `minOutPerUnit`.
+    uint256 private constant UNIT = 1e18;
 
     Mandate[] private _mandates;
 
@@ -155,6 +177,11 @@ contract AuravisMandate {
      * @notice Open a mandate: a bounded, revocable licence for the agent to act.
      * @param intent The user's instruction in their own words. Stored so that every
      *        later action can be audited against what was actually asked for.
+     * @param minOutPerUnit Price floor: minimum buyToken base units this contract
+     *        must receive per 1e18 base units of spendToken spent. This is the
+     *        owner's protection against a compromised agent routing value away
+     *        (see the contract header). Passing 0 waives it — acceptable for a
+     *        throwaway test mandate, never for one holding real funds.
      */
     function openMandate(
         address spendToken,
@@ -163,9 +190,11 @@ contract AuravisMandate {
         uint256 windowCap,
         uint64 windowLength,
         uint64 expiry,
+        uint256 minOutPerUnit,
         string calldata intent
     ) external onlyOwner returns (uint256 id) {
         if (lifetimeCap == 0) revert ZeroAmount();
+        if (expiry != 0 && expiry <= block.timestamp) revert ExpiryInPast();
 
         _mandates.push(
             Mandate({
@@ -179,12 +208,15 @@ contract AuravisMandate {
                 windowStart: uint64(block.timestamp),
                 expiry: expiry,
                 active: true,
-                intent: intent
+                intent: intent,
+                minOutPerUnit: minOutPerUnit
             })
         );
 
         id = _mandates.length - 1;
-        emit MandateOpened(id, spendToken, buyToken, lifetimeCap, windowCap, windowLength, expiry, intent);
+        emit MandateOpened(
+            id, spendToken, buyToken, lifetimeCap, windowCap, windowLength, expiry, minOutPerUnit, intent
+        );
     }
 
     function revokeMandate(uint256 id) external onlyOwner {
@@ -207,8 +239,11 @@ contract AuravisMandate {
      *                    agent's job; safety is this contract's job).
      * @param declaredIn  Amount of spendToken the agent claims it will use. We
      *                    approve exactly this and verify the true spend after.
-     * @param minOut      Floor on buyToken received. Slippage protection the
-     *                    agent cannot talk its way around.
+     * @param minOut      An *additional* floor the agent may impose on itself
+     *                    (e.g. tighter slippage than the mandate demands). The
+     *                    binding floor is always the owner's `minOutPerUnit`;
+     *                    this can only tighten it, never loosen it. Passing 0
+     *                    simply defers entirely to the owner's floor.
      * @param reason      One-line explanation, emitted for the user's feed.
      */
     function execute(
@@ -275,12 +310,20 @@ contract AuravisMandate {
         if (!ok) revert RouterCallFailed();
         _approveExact(spendToken, router, 0); // never leave a standing approval
 
+        // Measured against *this contract's* balances, not the router's claims.
+        // This is what makes redirected output detectable: if swapData sent the
+        // proceeds elsewhere, `received` is 0 here no matter what the router says.
         spent = inBefore - _balance(spendToken);
         received = _balance(buyToken) - outBefore;
 
         // The router may pull less than declared (fine) but never more.
         if (spent > declaredIn) revert SpentMoreThanDeclared(declaredIn, spent);
-        if (received < minOut) revert ReceivedLessThanMinimum(minOut, received);
+
+        // The binding floor is the owner's, scaled to what was actually spent.
+        // The agent's `minOut` may only tighten it.
+        uint256 floor = (spent * m.minOutPerUnit) / UNIT;
+        if (minOut > floor) floor = minOut;
+        if (received < floor) revert ReceivedLessThanMinimum(floor, received);
     }
 
     // ---------------------------------------------------------------------
@@ -311,6 +354,10 @@ contract AuravisMandate {
             windowSpent = 0; // window would roll over on execution
         }
         if (amountIn > m.windowCap - windowSpent) return (false, "exceeds the cap for this window");
+
+        // Allowed, but worth saying out loud: without a floor the agent's routing
+        // is unchecked on price. The UI should surface this, not bury it.
+        if (m.minOutPerUnit == 0) return (true, "within mandate (no price floor set)");
 
         return (true, "within mandate");
     }

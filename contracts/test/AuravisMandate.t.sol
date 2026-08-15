@@ -57,6 +57,14 @@ contract MockRouter {
         spendToken.transferFrom(msg.sender, address(this), actual);
         buyToken.mint(msg.sender, declared * rate);
     }
+
+    /// @dev The compromised-agent attack. The router is honest and does exactly
+    ///      what the calldata says — the calldata just says "pay someone else".
+    ///      A swap's recipient is encoded in `swapData`, which the agent controls.
+    function swapButRedirect(uint256 amountIn, address recipient) external {
+        spendToken.transferFrom(msg.sender, address(this), amountIn);
+        buyToken.mint(recipient, amountIn * rate);
+    }
 }
 
 contract AuravisMandateTest is Test {
@@ -82,10 +90,23 @@ contract AuravisMandateTest is Test {
         vault.setRouterAllowed(address(router), true);
     }
 
+    /// @dev MockRouter pays exactly `rate` (2), so a floor of 2e18 is the exact
+    ///      fair price — tight enough that any value leakage trips it.
+    uint256 internal constant FAIR_FLOOR = 2e18;
+
     function _openMandate(uint256 lifetimeCap, uint256 windowCap, uint64 windowLength)
         internal
         returns (uint256 id)
     {
+        return _openMandateWithFloor(lifetimeCap, windowCap, windowLength, FAIR_FLOOR);
+    }
+
+    function _openMandateWithFloor(
+        uint256 lifetimeCap,
+        uint256 windowCap,
+        uint64 windowLength,
+        uint256 minOutPerUnit
+    ) internal returns (uint256 id) {
         vm.prank(owner);
         id = vault.openMandate(
             address(usdc),
@@ -94,6 +115,7 @@ contract AuravisMandateTest is Test {
             windowCap,
             windowLength,
             uint64(block.timestamp + 30 days),
+            minOutPerUnit,
             "buy if it drops 8%"
         );
     }
@@ -201,6 +223,68 @@ contract AuravisMandateTest is Test {
         vault.execute(id, address(router), _swapCalldata(50e6), 50e6, 100e6, "slipped");
     }
 
+    // -- the compromised-agent attack ------------------------------------
+
+    /**
+     * @notice The attack the owner-set price floor exists to stop.
+     *
+     * A jailbroken agent keeps every other rule: it stays under the cap, uses an
+     * allowlisted router, and declares its spend honestly. It simply points the
+     * swap output at its own address and passes `minOut = 0`. Under an
+     * agent-supplied floor this succeeds — spend is capped, but the money is
+     * gone. The floor now comes from owner state, so the contract notices that
+     * *it* received nothing and reverts.
+     */
+    function test_RevertsWhenAgentRedirectsOutputToItself() public {
+        uint256 id = _openMandate(200e6, 0, 0);
+        address attacker = address(0xDEADBEEF);
+
+        bytes memory data =
+            abi.encodeWithSignature("swapButRedirect(uint256,address)", 50e6, attacker);
+
+        // Floor is 50e6 * 2e18 / 1e18 = 100e6; the vault receives 0.
+        vm.prank(agent);
+        vm.expectRevert(
+            abi.encodeWithSelector(AuravisMandate.ReceivedLessThanMinimum.selector, 100e6, 0)
+        );
+        vault.execute(id, address(router), data, 50e6, 0, "totally normal purchase");
+
+        assertEq(target.balanceOf(attacker), 0, "attacker must receive nothing");
+        assertEq(vault.getMandate(id).spent, 0, "no spend should be booked");
+    }
+
+    /// @notice The agent cannot loosen the owner's floor, only tighten it.
+    function test_AgentMinOutCannotUndercutOwnerFloor() public {
+        uint256 id = _openMandate(200e6, 0, 0);
+        router.setRate(1); // pays 50e6 against a 100e6 floor
+
+        // Agent asks for a floor of 1 wei, hoping to wave through a bad price.
+        vm.prank(agent);
+        vm.expectRevert(
+            abi.encodeWithSelector(AuravisMandate.ReceivedLessThanMinimum.selector, 100e6, 50e6)
+        );
+        vault.execute(id, address(router), _swapCalldata(50e6), 50e6, 1, "good enough, trust me");
+    }
+
+    /// @notice A tighter agent floor is still respected — it may only add caution.
+    function test_AgentMayTightenFloor() public {
+        uint256 id = _openMandate(200e6, 0, 0);
+
+        vm.prank(agent);
+        vm.expectRevert(
+            abi.encodeWithSelector(AuravisMandate.ReceivedLessThanMinimum.selector, 150e6, 100e6)
+        );
+        vault.execute(id, address(router), _swapCalldata(50e6), 50e6, 150e6, "want a better price");
+    }
+
+    function test_RejectsExpiryInThePast() public {
+        vm.prank(owner);
+        vm.expectRevert(AuravisMandate.ExpiryInPast.selector);
+        vault.openMandate(
+            address(usdc), address(target), 100e6, 0, 0, uint64(block.timestamp - 1), FAIR_FLOOR, "stale"
+        );
+    }
+
     function test_StrangerCannotExecute() public {
         uint256 id = _openMandate(200e6, 0, 0);
 
@@ -265,5 +349,14 @@ contract AuravisMandateTest is Test {
         (ok, why) = vault.canExecute(id, 150e6);
         assertFalse(ok);
         assertEq(why, "exceeds the mandate's total cap");
+    }
+
+    /// @notice A waived floor is allowed but must be visible, not silent.
+    function test_CanExecuteFlagsMissingPriceFloor() public {
+        uint256 id = _openMandateWithFloor(100e6, 0, 0, 0);
+
+        (bool ok, string memory why) = vault.canExecute(id, 50e6);
+        assertTrue(ok);
+        assertEq(why, "within mandate (no price floor set)");
     }
 }
