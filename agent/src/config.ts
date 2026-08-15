@@ -21,6 +21,12 @@ const schema = z.object({
   AGENT_PRIVATE_KEY: z.string().min(1, "AGENT_PRIVATE_KEY is required"),
   AGENT_POLL_INTERVAL_MS: z.coerce.number().default(15_000),
 
+  // -- owner identity ----------------------------------------------------
+  // Only needed by setup scripts (allowlist, deposit, openMandate). The agent
+  // service never reads this and must never be given it — the entire security
+  // model is that the owner key can overrule the agent key.
+  OWNER_PRIVATE_KEY: z.string().optional(),
+
   // -- OKX -----------------------------------------------------------------
   OKX_API_KEY: z.string().optional(),
   OKX_API_SECRET: z.string().optional(),
@@ -63,6 +69,8 @@ export const config = {
     privateKey: env.AGENT_PRIVATE_KEY as `0x${string}`,
     pollIntervalMs: env.AGENT_POLL_INTERVAL_MS,
   },
+
+  ownerPrivateKey: env.OWNER_PRIVATE_KEY as `0x${string}` | undefined,
 
   okx: {
     apiKey: env.OKX_API_KEY,

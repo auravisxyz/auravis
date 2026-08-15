@@ -91,6 +91,24 @@ async function main() {
   } catch (err) {
     console.log(`threw: ${(err as Error).message}`);
   }
+
+  // 5. THE DECISION POINT. Does the aggregator serve X Layer *testnet* (1952)?
+  //    If not, a real OKX-routed execute() can only ever happen on mainnet,
+  //    and the mainnet deploy has to move earlier than day 5 — it would be the
+  //    single largest untested piece of the system.
+  console.log("\n=== can we quote on TESTNET (1952)? ===");
+  await probe(
+    "swap quote — testnet 1952",
+    `/api/v6/dex/aggregator/quote?chainIndex=1952&amount=1000000` +
+      `&fromTokenAddress=${USDT_XLAYER}&toTokenAddress=0x0000000000000000000000000000000000000000`,
+  );
+
+  console.log("\n=== same quote on MAINNET (196), as a control ===");
+  await probe(
+    "swap quote — mainnet 196",
+    `/api/v6/dex/aggregator/quote?chainIndex=196&amount=1000000` +
+      `&fromTokenAddress=${USDT_XLAYER}&toTokenAddress=0x74b7f16337b8972027f6196a17a631ac6de26d22`,
+  );
 }
 
 main().catch((err) => {
