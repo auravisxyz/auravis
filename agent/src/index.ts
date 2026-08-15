@@ -3,7 +3,7 @@ import { activeChain, agentAccount, publicClient } from "./chain.js";
 import { createPriceFeed } from "./price.js";
 import { startWatchLoop } from "./watcher.js";
 import { mandateCount } from "./mandate.js";
-import { listActiveTriggers, markTriggerTriggered, recordExecution } from "./db/store.js";
+import { getActiveTriggersCached, markTriggerTriggered, recordExecution } from "./db/store.js";
 
 async function main() {
   console.log("Auravis agent starting");
@@ -34,7 +34,7 @@ async function main() {
   console.log(`Polling every ${config.agent.pollIntervalMs}ms`);
 
   const stop = startWatchLoop(
-    listActiveTriggers,
+    () => getActiveTriggersCached(),
     priceFeed,
     async (fire) => {
       console.log(

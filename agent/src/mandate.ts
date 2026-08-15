@@ -3,12 +3,30 @@ import { publicClient, walletClient } from "./chain.js";
 import { auravisMandateAbi } from "./abi/AuravisMandate.js";
 import { config } from "./config.js";
 
-/** ERC-8021 attribution suffix for the configured Builder Code, if any. */
+/**
+ * Attribution suffix for the configured Builder Code, if any.
+ *
+ * Builder Codes are issued as opaque alphanumeric identifiers — ours is
+ * `csm143igm03b0ev4`, which contains s/m/i/g/v and is therefore NOT hex.
+ * Naively prefixing "0x" produces an invalid hex string and viem throws, so
+ * anything non-hex is encoded as its UTF-8 bytes instead.
+ *
+ * ⚠️ UNVERIFIED (blocks mainnet, not testnet): OKX's Classic Swap API docs
+ * expose no builderCode request parameter, and the encoding they expect for
+ * on-chain attribution isn't documented in the swap reference. Two candidates:
+ * this calldata suffix, or the `callDataMemo` swap parameter (which wants a
+ * 128-char hex string). Confirm with OKX before relying on mainnet attribution
+ * for the Launch Grant — getting this wrong means volume doesn't get credited.
+ */
 function builderCodeSuffix(): Hex | undefined {
-  if (!config.okx.builderCode) return undefined;
-  return config.okx.builderCode.startsWith("0x")
-    ? (config.okx.builderCode as Hex)
-    : (`0x${config.okx.builderCode}` as Hex);
+  const code = config.okx.builderCode;
+  if (!code) return undefined;
+
+  if (/^0x[0-9a-fA-F]*$/.test(code)) return code as Hex;
+  if (/^[0-9a-fA-F]+$/.test(code)) return `0x${code}` as Hex;
+
+  const hex = Buffer.from(code, "utf8").toString("hex");
+  return `0x${hex}` as Hex;
 }
 
 if (!config.mandateAddress) {

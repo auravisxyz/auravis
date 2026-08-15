@@ -31,6 +31,13 @@ const schema = z.object({
 
   // -- data ------------------------------------------------------------------
   DATABASE_URL: z.string().optional(),
+
+  // -- local testing ---------------------------------------------------------
+  // Forces the mock price feed even when OKX credentials are present, so the
+  // watch loop can be exercised end to end from a network that can't reach
+  // OKX. Everything else stays real: real Neon, real contract, real checks.
+  PRICE_FEED: z.enum(["auto", "mock", "okx"]).default("auto"),
+  MOCK_PRICE: z.coerce.number().default(100),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -67,6 +74,9 @@ export const config = {
   },
 
   databaseUrl: env.DATABASE_URL,
+
+  priceFeed: env.PRICE_FEED,
+  mockPrice: env.MOCK_PRICE,
 } as const;
 
 export type Config = typeof config;

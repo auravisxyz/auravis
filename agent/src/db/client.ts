@@ -15,8 +15,23 @@ let _db: PostgresJsDatabase<typeof schema> | null = null;
 export function getDb(): PostgresJsDatabase<typeof schema> | null {
   if (!config.databaseUrl) return null;
   if (!_db) {
-    const client = postgres(config.databaseUrl, { max: 5 });
-    _db = drizzle(client, { schema });
+    _db = drizzle(createClient(config.databaseUrl), { schema });
   }
   return _db;
+}
+
+/**
+ * Hosted Postgres (Neon, Supabase) requires TLS. postgres.js reads `sslmode`
+ * from the URL, but the providers' copy-paste strings don't always include it
+ * and the resulting error ("connection is insecure") is unhelpfully worded.
+ * Setting it explicitly for known-hosted providers avoids that dead end.
+ */
+export function createClient(url: string) {
+  const needsSsl = /neon\.tech|supabase\.(co|com)|render\.com|railway/.test(url);
+  const alreadySpecified = /sslmode=/.test(url);
+
+  return postgres(url, {
+    max: 5,
+    ...(needsSsl && !alreadySpecified ? { ssl: "require" as const } : {}),
+  });
 }

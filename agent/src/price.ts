@@ -86,14 +86,17 @@ export class OkxMarketPriceFeed implements PriceFeed {
  * lets us trigger a mandate on cue without waiting for a real market move.
  */
 export class MockPriceFeed implements PriceFeed {
-  constructor(private prices: Record<string, number>) {}
+  constructor(
+    private prices: Record<string, number>,
+    private fallback?: number,
+  ) {}
 
   setPrice(token: string, price: number) {
     this.prices[token] = price;
   }
 
   async getPrice(token: string): Promise<number> {
-    const price = this.prices[token];
+    const price = this.prices[token] ?? this.fallback;
     if (price === undefined) throw new Error(`No mock price set for ${token}`);
     return price;
   }
@@ -101,12 +104,27 @@ export class MockPriceFeed implements PriceFeed {
 
 export function createPriceFeed(): PriceFeed {
   const { apiKey, apiSecret, apiPassphrase, projectId } = config.okx;
-  if (apiKey && apiSecret && apiPassphrase) {
-    return new OkxMarketPriceFeed(apiKey, apiSecret, apiPassphrase, projectId);
+  const haveCreds = Boolean(apiKey && apiSecret && apiPassphrase);
+
+  if (config.priceFeed === "mock") {
+    console.warn(
+      `[price] PRICE_FEED=mock — every token reports $${config.mockPrice}. ` +
+        "Local testing only; this bypasses OKX entirely.",
+    );
+    return new MockPriceFeed({}, config.mockPrice);
   }
+
+  if (haveCreds) {
+    return new OkxMarketPriceFeed(apiKey!, apiSecret!, apiPassphrase!, projectId);
+  }
+
+  if (config.priceFeed === "okx") {
+    throw new Error("PRICE_FEED=okx but OKX credentials are not configured");
+  }
+
   console.warn(
     "[price] OKX API credentials not set — using MockPriceFeed. " +
       "Set OKX_API_KEY / OKX_API_SECRET / OKX_API_PASSPHRASE in .env for real prices.",
   );
-  return new MockPriceFeed({});
+  return new MockPriceFeed({}, config.mockPrice);
 }

@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import postgres from "postgres";
 import { config } from "../config.js";
+import { createClient } from "./client.js";
 
 /**
  * Applies migrations/0001_init.sql directly, no drizzle-kit involved. For a
@@ -19,10 +19,14 @@ async function main() {
   const dir = path.dirname(fileURLToPath(import.meta.url));
   const sql = readFileSync(path.join(dir, "migrations", "0001_init.sql"), "utf8");
 
-  const client = postgres(config.databaseUrl, { max: 1 });
+  const client = createClient(config.databaseUrl);
   console.log("Applying migrations/0001_init.sql ...");
   await client.unsafe(sql);
-  console.log("Done.");
+
+  const [triggers] = await client`select count(*)::int as n from triggers`;
+  const [executions] = await client`select count(*)::int as n from executions`;
+  console.log(`Done. triggers=${triggers?.n ?? "?"} executions=${executions?.n ?? "?"} rows.`);
+
   await client.end();
 }
 

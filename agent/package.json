@@ -8,7 +8,10 @@
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
-    "db:migrate": "tsx src/db/migrate.ts"
+    "db:migrate": "tsx src/db/migrate.ts",
+    "probe": "tsx src/probe.ts",
+    "seed": "tsx src/seed.ts",
+    "status": "tsx src/status.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
