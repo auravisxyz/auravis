@@ -145,10 +145,12 @@ function describeRefusal(err: unknown): string {
 }
 
 function humanizeError(name: string, args: readonly unknown[] | undefined): string {
-  // All amounts in this build are 6-decimal stablecoins.
+  // All amounts in this build are 6-decimal stablecoins. Two decimals always:
+  // formatUnits gives "9.9", and money that drops a trailing zero looks like
+  // a bug to anyone reading the feed.
   const fmt = (v: unknown): string => {
     try {
-      return formatUnits(BigInt(v as string | number | bigint), 6);
+      return Number(formatUnits(BigInt(v as string | number | bigint), 6)).toFixed(2);
     } catch {
       return String(v);
     }

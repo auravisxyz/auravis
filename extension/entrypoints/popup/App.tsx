@@ -46,6 +46,22 @@ function hostname(url: string): string {
   }
 }
 
+const CURRENCY_SYMBOL: Record<string, string> = { USD: "$", GBP: "£", EUR: "€", JPY: "¥" };
+
+/**
+ * A hero number earns its size by being readable. Two decimals above a dollar;
+ * below a dollar, four significant figures — "$0.00" for a $0.00004521 token
+ * would be confidently wrong, which is worse than long.
+ */
+function formatMoney(value: number, currency: string): { text: string; symbol: string | null } {
+  const symbol = CURRENCY_SYMBOL[currency.toUpperCase()] ?? null;
+  const body =
+    value >= 1
+      ? value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : String(parseFloat(value.toPrecision(4)));
+  return { text: `${symbol ?? ""}${body}`, symbol };
+}
+
 type Stage =
   | "capturing"
   | "ready"
@@ -338,8 +354,21 @@ function CaptureCard({ capture }: { capture: PageCapture }) {
   const price = capture.primaryPrice;
   const extra = capture.extraCosts;
   const shipping = extra?.shipping;
-  const symbol = price?.raw.match(/[$£€¥]/)?.[0];
+  const money = price ? formatMoney(price.value, price.currency) : null;
+  const symbol = money?.symbol;
   const landed = price && shipping ? price.value + shipping.value : null;
+
+  /**
+   * Only mention delivery and tax where they could exist.
+   *
+   * A CoinGecko price chart has no shipping, and saying "delivery and tax not
+   * included" there is noise that makes the real warning on a shop page easier
+   * to ignore. We treat detectable stock state as the tell — pages that talk
+   * about being in or out of stock are selling something; a price chart isn't.
+   */
+  const looksLikeShop =
+    capture.availability === "in-stock" || capture.availability === "out-of-stock";
+  const showsShippingCaveat = Boolean(price && (looksLikeShop || extra?.taxAtCheckout));
 
   return (
     <section className="glass-panel rise flex flex-col gap-3 p-5">
@@ -348,10 +377,10 @@ function CaptureCard({ capture }: { capture: PageCapture }) {
           {hostname(capture.url)}
         </p>
 
-        {price ? (
+        {price && money ? (
           <div className="flex items-baseline gap-2 pt-1">
             <span className="text-3xl font-semibold tracking-tight text-ink tabular-nums">
-              {price.raw}
+              {money.text}
             </span>
             {!symbol && <span className="text-sm text-ink-faint">{price.currency}</span>}
             {capture.availability === "out-of-stock" && (
@@ -369,28 +398,33 @@ function CaptureCard({ capture }: { capture: PageCapture }) {
         )}
       </div>
 
-      <div className="hairline" />
+      {(landed !== null || showsShippingCaveat || price?.source === "guessed" || !price) && (
+        <>
+          <div className="hairline" />
+          <div className="flex flex-col gap-1.5">
+            {landed !== null ? (
+              <p className="note">
+                About {formatMoney(landed, price!.currency).text} delivered
+                {extra?.taxAtCheckout && ", before tax"}
+              </p>
+            ) : showsShippingCaveat ? (
+              <p className="note">
+                {extra?.taxAtCheckout
+                  ? "Delivery and tax added at checkout"
+                  : "Delivery and tax not included"}
+              </p>
+            ) : null}
 
-      <div className="flex flex-col gap-1.5">
-        {landed !== null ? (
-          <p className="note">
-            About {symbol ?? ""}
-            {landed.toFixed(2)} delivered{extra?.taxAtCheckout && ", before tax"}
-          </p>
-        ) : price && extra ? (
-          <p className="note">
-            {extra.taxAtCheckout
-              ? "Delivery and tax added at checkout"
-              : "Delivery and tax not included"}
-          </p>
-        ) : null}
+            {price?.source === "guessed" && (
+              <p className="note note-warn">
+                Price guessed from page text — check it&apos;s the right one
+              </p>
+            )}
 
-        {price?.source === "guessed" && (
-          <p className="note note-warn">Price guessed from page text — check it&apos;s the right one</p>
-        )}
-
-        {!price && <p className="note">No price found — name one in your instruction</p>}
-      </div>
+            {!price && <p className="note">No price found — name one in your instruction</p>}
+          </div>
+        </>
+      )}
     </section>
   );
 }
@@ -468,7 +502,8 @@ function ReviewCard({
   const price = capture.primaryPrice;
   const shipping = capture.extraCosts?.shipping?.value ?? null;
   const delivered = price && shipping !== null ? price.value + shipping : null;
-  const symbol = price?.raw.match(/[$£€¥]/)?.[0] ?? "$";
+  const priceText = price ? formatMoney(price.value, price.currency).text : null;
+  const symbol = (price && formatMoney(price.value, price.currency).symbol) ?? "$";
 
   const percentWithoutPrice = draft.targetPercent !== null && !price;
   const watchBlocked = !hasTarget || percentWithoutPrice || unsure;
@@ -498,7 +533,7 @@ function ReviewCard({
       draft.direction === "below"
         ? price.value * (1 - draft.targetPercent / 100)
         : price.value * (1 + draft.targetPercent / 100);
-    targetLine = `${draft.targetPercent}% ${draft.direction === "below" ? "below" : "above"} the ${price.raw} you see today — alerts at ${symbol}${fireAt.toFixed(2)}`;
+    targetLine = `${draft.targetPercent}% ${draft.direction === "below" ? "below" : "above"} the ${priceText} you see today — alerts at ${formatMoney(fireAt, price.currency).text}`;
   } else if (draft.targetPrice !== null) {
     targetLine =
       basis === "delivered" && delivered !== null

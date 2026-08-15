@@ -71,11 +71,26 @@ docs/        Research and technical notes
 
 ## Proof transactions
 
-_Populated as we ship. Every entry is a real on-chain action taken by the agent._
+Real on-chain actions taken by the agent, unattended, on X Layer testnet.
+Same agent, same key, same instruction in both rows below — the only thing that
+changed was the price the router offered.
 
 | What | Tx |
 |---|---|
-| _pending_ | |
+| Agent executed a swap on its own, inside its mandate | [`0xeda51fcc…`](https://www.okx.com/web3/explorer/xlayer-test/tx/0xeda51fccdd537ec875a24365812046b61eed706280e51ae8972a3f745b6fcb00) |
+| Router rate dropped below the mandate's price floor | [`0x9970fc70…`](https://www.okx.com/web3/explorer/xlayer-test/tx/0x9970fc7040e5eb9c82a062535c77294ccb81338fc6ee1037619557241feb2508) |
+| The same agent was then **refused by the contract** | reverted — `ReceivedLessThanMinimum(9.90, 9.00)` |
+
+> The chain refused: the router offered too little — your floor requires 9.90,
+> it offered 9.00. **The price floor held.**
+
+That sentence is generated from the revert itself, not written by hand. A
+separate run was refused by the rolling rate limit rather than the price floor,
+so both independent guardrails have now held against a live agent.
+
+| Network | Contract | Address |
+|---|---|---|
+| Testnet rehearsal vault | AuravisMandate | [`0x4b842c68…`](https://www.okx.com/web3/explorer/xlayer-test/address/0x4b842c68194042Fe559d2B924Aa32dFFFbfDB3b8) |
 
 ## Development
 

@@ -29,7 +29,11 @@ async function main() {
   }
 
   // `npm run seed -- --auto` seeds an auto-mode trigger; default is catch.
+  // `--mandate=1` targets a different mandate — needed once mandate 0 has
+  // used up its rolling window, since a fresh mandate gets a fresh window.
   const mode = process.argv.includes("--auto") ? ("auto" as const) : ("catch" as const);
+  const mandateArg = process.argv.find((a) => a.startsWith("--mandate="));
+  const mandateId = mandateArg ? BigInt(mandateArg.split("=")[1] ?? "0") : 0n;
 
   // Prefer the testnet rig's token when configured, so an auto fire has a
   // real router to execute against. Falls back to mainnet USDC otherwise.
@@ -38,7 +42,7 @@ async function main() {
   // Target is deliberately far above the mock price ($100 by default) so the
   // "below" condition is already true and it fires on the very next tick.
   const trigger = await createTrigger({
-    mandateId: 0n,
+    mandateId,
     token,
     direction: "below",
     targetPrice: 200,
@@ -60,7 +64,7 @@ async function main() {
 
   // Ask the contract directly what it would do. This is the same call the
   // watcher makes before treating a price cross as a real fire.
-  const { allowed, why } = await canExecute(0n, 50_000_000n);
+  const { allowed, why } = await canExecute(mandateId, 10_000_000n);
   console.log(`\nContract says: allowed=${allowed} — "${why}"`);
 
   process.exit(0);
