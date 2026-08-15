@@ -13,62 +13,129 @@ export interface PriceFeed {
 /**
  * OKX Market API price feed.
  *
- * ⚠️ VERIFY BEFORE RELYING ON THIS (day 1 task): confirm the exact request
- * path, required headers, and signing method against
- * https://web3.okx.com/onchainos/dev-docs/market/market-price-reference
- * once OKX_API_KEY / OKX_API_SECRET / OKX_API_PASSPHRASE are issued. OKX's
- * v5 endpoints generally require the standard OK-ACCESS-* signed headers
- * even for read-only market data — this implementation assumes that and
- * will need its request signing double-checked against a live call.
+ * The price endpoint is **POST, not GET** — a live probe returned
+ * "Request method 'GET' not supported". It takes a batch of tokens in the
+ * body, so one request covers every token we're watching rather than one
+ * request per token.
+ *
+ * Signing confirmed working against the live API: the signature covers
+ * timestamp + method + path + body, and for POST the body must be included
+ * byte-for-byte as sent, or the signature won't match.
  */
 export class OkxMarketPriceFeed implements PriceFeed {
   private readonly baseUrl = "https://web3.okx.com";
+  private readonly path = "/api/v6/dex/market/price";
 
   constructor(
     private readonly apiKey: string,
     private readonly apiSecret: string,
     private readonly apiPassphrase: string,
     private readonly projectId?: string,
+    private readonly chainIndex = "196",
   ) {}
 
   async getPrice(token: string, vs = "USD"): Promise<number> {
-    const path = `/api/v5/dex/market/price?chainIndex=196&tokenContractAddress=${token}`;
-    const timestamp = new Date().toISOString();
-    const signature = await this.sign(timestamp, "GET", path);
+    if (vs !== "USD") {
+      throw new Error(`Quote currency "${vs}" not supported — prices are USD-denominated`);
+    }
+    const prices = await this.getPrices([token]);
+    const price = prices.get(token.toLowerCase());
+    if (price === undefined) {
+      throw new Error(`OKX returned no price for ${token}`);
+    }
+    return price;
+  }
 
-    const res = await fetch(`${this.baseUrl}${path}`, {
+  /**
+   * Batch lookup. Returns a map keyed by lowercased contract address —
+   * OKX echoes addresses back in its own casing, so normalising here saves
+   * every caller from getting that subtly wrong.
+   */
+  async getPrices(tokens: string[]): Promise<Map<string, number>> {
+    const payload = tokens.map((t) => ({
+      chainIndex: this.chainIndex,
+      tokenContractAddress: t,
+    }));
+    const body = JSON.stringify(payload);
+
+    const timestamp = new Date().toISOString();
+    const signature = await this.sign(timestamp, "POST", this.path, body);
+
+    const res = await fetch(`${this.baseUrl}${this.path}`, {
+      method: "POST",
       headers: {
+        "Content-Type": "application/json",
         "OK-ACCESS-KEY": this.apiKey,
         "OK-ACCESS-SIGN": signature,
         "OK-ACCESS-TIMESTAMP": timestamp,
         "OK-ACCESS-PASSPHRASE": this.apiPassphrase,
         ...(this.projectId ? { "OK-ACCESS-PROJECT": this.projectId } : {}),
       },
+      body,
     });
 
     if (!res.ok) {
-      throw new Error(`OKX Market API error ${res.status}: ${await res.text()}`);
+      throw new Error(`OKX Market API HTTP ${res.status}: ${await res.text()}`);
     }
 
-    const body = (await res.json()) as {
+    const json = (await res.json()) as {
       code: string;
-      data?: Array<{ price: string }>;
       msg?: string;
+      data?: Array<{ tokenContractAddress?: string; price?: string }>;
     };
 
-    if (body.code !== "0" || !body.data?.[0]) {
-      throw new Error(`OKX Market API returned no price: ${body.msg ?? "unknown error"}`);
+    if (json.code !== "0") {
+      throw new Error(`OKX Market API error ${json.code}: ${json.msg ?? "unknown"}`);
     }
 
-    const price = Number(body.data[0].price);
-    if (vs !== "USD") {
-      throw new Error(`Quote currency "${vs}" not supported yet — prices are USD-denominated`);
+    const rows = json.data ?? [];
+    const out = new Map<string, number>();
+
+    // OKX does not reliably echo `tokenContractAddress` back — a live response
+    // came back as just `[{"price":"0.999…"}]`. Keying solely off that field
+    // meant a silently empty map: no price, no comparison, no fired trigger,
+    // and nothing in the logs explaining it. Results are returned positionally,
+    // so align by index and treat the echoed address as a cross-check when
+    // it's actually there.
+    rows.forEach((row, i) => {
+      if (row.price === undefined) return;
+      const value = Number(row.price);
+      if (!Number.isFinite(value)) return;
+
+      const requested = tokens[i];
+      const echoed = row.tokenContractAddress?.toLowerCase();
+
+      if (requested) out.set(requested.toLowerCase(), value);
+
+      if (echoed && requested && echoed !== requested.toLowerCase()) {
+        // Ordering assumption violated — trust the address, and say so loudly
+        // rather than quietly pricing the wrong token.
+        console.warn(
+          `[price] OKX returned ${echoed} at index ${i} but we asked for ` +
+            `${requested.toLowerCase()}. Keying by the returned address.`,
+        );
+        out.delete(requested.toLowerCase());
+        out.set(echoed, value);
+      }
+    });
+
+    if (rows.length !== tokens.length) {
+      console.warn(
+        `[price] asked for ${tokens.length} token(s), got ${rows.length} row(s) — ` +
+          "positional alignment may be unreliable.",
+      );
     }
-    return price;
+
+    return out;
   }
 
-  private async sign(timestamp: string, method: string, path: string): Promise<string> {
-    const message = `${timestamp}${method}${path}`;
+  private async sign(
+    timestamp: string,
+    method: string,
+    path: string,
+    body = "",
+  ): Promise<string> {
+    const message = `${timestamp}${method}${path}${body}`;
     const key = await crypto.subtle.importKey(
       "raw",
       new TextEncoder().encode(this.apiSecret),

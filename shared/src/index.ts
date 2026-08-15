@@ -143,3 +143,16 @@ export type ExtensionMessage =
   | { type: "EXTRACT_INTENT"; capture: PageCapture; instruction: string }
   | { type: "INTENT_RESULT"; draft: IntentDraft }
   | { type: "ERROR"; message: string };
+
+// ---------------------------------------------------------------------------
+// Re-exports — one import path for consumers
+// ---------------------------------------------------------------------------
+
+/**
+ * `intent.ts` imports types from here, but only as `import type`, which is
+ * erased at compile time. So this is a type-level cycle, not a runtime one,
+ * and consumers get everything from `@auravis/shared` without needing subpath
+ * exports configured in three different bundlers.
+ */
+export { PatternIntentExtractor, INTENT_SYSTEM_PROMPT } from "./intent.js";
+export type { IntentExtractor } from "./intent.js";
