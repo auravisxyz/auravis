@@ -19,8 +19,8 @@ import { getSwapQuote } from "./swap.js";
 const CONFIRM = process.argv.includes("--confirm");
 
 // X Layer mainnet. Verify against the token list endpoint if these ever move.
-const USDT: Address = "0x1e4a5963abfd975d8c9021ce480b42188849d41d";
-const USDC: Address = "0x74b7f16337b8972027f6196a17a631ac6de26d22";
+const USDT: Address = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
+const USDC: Address = "0xb6ceceab302e2e4948951ee7843fc24e92933061";
 
 const SPEND_AMOUNT = 10_000_000n; // 10 USDT (6 decimals)
 const LIFETIME_CAP = 20_000_000n; // 20 USDT

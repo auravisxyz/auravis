@@ -47,12 +47,12 @@ export interface TokenOption {
 
 export const TOKENS: Record<"mainnet" | "testnet", TokenOption[]> = {
   mainnet: [
-    { symbol: "USDT", address: "0x1e4a5963abfd975d8c9021ce480b42188849d41d", decimals: 6 },
-    { symbol: "USDC", address: "0x74b7f16337b8972027f6196a17a631ac6de26d22", decimals: 6 },
+    { symbol: "USDT", address: "0x779ded0c9e1022225f8e0630b35a9b54be713736", decimals: 6 },
+    { symbol: "USDC", address: "0xb6ceceab302e2e4948951ee7843fc24e92933061", decimals: 6 },
   ],
   testnet: [
-    { symbol: "USDT (test)", address: "0x1e4a5963abfd975d8c9021ce480b42188849d41d", decimals: 6 },
-    { symbol: "USDC (test)", address: "0x74b7f16337b8972027f6196a17a631ac6de26d22", decimals: 6 },
+    { symbol: "USDT (test)", address: "0x779ded0c9e1022225f8e0630b35a9b54be713736", decimals: 6 },
+    { symbol: "USDC (test)", address: "0xb6ceceab302e2e4948951ee7843fc24e92933061", decimals: 6 },
   ],
 };
 

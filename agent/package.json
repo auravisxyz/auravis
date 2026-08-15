@@ -13,7 +13,9 @@
     "seed": "tsx src/seed.ts",
     "status": "tsx src/status.ts",
     "setup:mainnet": "tsx src/setup-mainnet.ts",
-    "execute:mainnet": "tsx src/execute-mainnet.ts"
+    "execute:mainnet": "tsx src/execute-mainnet.ts",
+    "balances": "tsx src/balances.ts",
+    "tokens": "tsx src/tokens.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

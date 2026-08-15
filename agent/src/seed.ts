@@ -37,7 +37,7 @@ async function main() {
 
   // Prefer the testnet rig's token when configured, so an auto fire has a
   // real router to execute against. Falls back to mainnet USDC otherwise.
-  const token = config.mockUsdt ?? "0x74b7f16337b8972027f6196a17a631ac6de26d22";
+  const token = config.mockUsdt ?? "0xb6ceceab302e2e4948951ee7843fc24e92933061";
 
   // Target is deliberately far above the mock price ($100 by default) so the
   // "below" condition is already true and it fires on the very next tick.

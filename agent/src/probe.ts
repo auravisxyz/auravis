@@ -13,7 +13,7 @@ import { config } from "./config.js";
 const BASE = "https://web3.okx.com";
 
 /** USDT on X Layer — replace if the token list says otherwise. */
-const USDT_XLAYER = "0x1e4a5963abfd975d8c9021ce480b42188849d41d";
+const USDT_XLAYER = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
 
 async function sign(timestamp: string, method: string, path: string, secret: string, body = "") {
   const key = await crypto.subtle.importKey(
@@ -107,7 +107,7 @@ async function main() {
   await probe(
     "swap quote — mainnet 196",
     `/api/v6/dex/aggregator/quote?chainIndex=196&amount=1000000` +
-      `&fromTokenAddress=${USDT_XLAYER}&toTokenAddress=0x74b7f16337b8972027f6196a17a631ac6de26d22`,
+      `&fromTokenAddress=${USDT_XLAYER}&toTokenAddress=0xb6ceceab302e2e4948951ee7843fc24e92933061`,
   );
 }
 
