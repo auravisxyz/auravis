@@ -49,7 +49,25 @@ Rules:
 - A price target and a percentage can both be present. Keep both.
 - Default mode to "catch" unless the user explicitly asks for automatic execution.
 - List every inference in "assumptions". Silent guesses about someone's money are worse than admitting uncertainty.
-- If the instruction is ambiguous, lower confidence rather than picking arbitrarily.`;
+- If the instruction is ambiguous, lower confidence rather than picking arbitrarily.
+
+Writing the "assumptions" and "summary":
+These are read by someone about to commit their own money, on a small popup. Write the way you would say it out loud to them.
+
+- Address them as "you". Say what you did and why, in one short sentence each.
+- Never name a field or a value from this JSON. No "null", "targetPrice", "direction", "quantity", "the amount field", "set to". They cannot see this JSON and the words mean nothing to them.
+- Never mention confidence, parsing, extraction, or models.
+- No trailing full stops on fragments, and no more than about 15 words per line.
+
+Say this:
+  "You did not say how many or how much to spend"
+  "$20 is below the $89.99 on the page, so I will wait for it to fall"
+  "You will confirm before anything is bought"
+
+Not this:
+  "No quantity or spend amount was specified, so both are null"
+  "Since $20 is below the current price, direction is assumed to be 'below'"
+  "Mode defaulted to 'catch' since automatic execution was not explicitly requested"`;
 
 /**
  * Deterministic extractor with no model behind it.
@@ -164,7 +182,7 @@ export class PatternIntentExtractor implements IntentExtractor {
     const risesWord = /(rise|rises|rising|above|over|more than|exceeds?)/.test(text);
     const direction: IntentDraft["direction"] = risesWord && !fallsWord ? "above" : "below";
     if (!fallsWord && !risesWord) {
-      assumptions.push('No direction stated — assumed "below" (buy the dip).');
+      assumptions.push("You did not say up or down, so I will watch for it falling");
     }
 
     // "automatically" must match as readily as "auto" — the word boundary in
@@ -173,19 +191,19 @@ export class PatternIntentExtractor implements IntentExtractor {
     const wantsAuto = /\bauto/.test(text) || /without asking|by itself|don'?t ask|on its own/.test(text);
     const mode: IntentDraft["mode"] = wantsAuto ? "auto" : "catch";
     if (mode === "catch" && !/\bask\b|\bconfirm\b|check with me/.test(text)) {
-      assumptions.push("Defaulted to Catch mode — you confirm before anything is bought.");
+      assumptions.push("You will confirm before anything is bought");
     }
     if (mode === "auto") {
-      assumptions.push("Auto mode — the agent will buy without asking, within your cap.");
+      assumptions.push("I will buy without asking, never past your cap");
     }
 
     // A quantity is a perfectly good way to say what you want. Only complain
     // when neither a budget nor a count was given.
     if (amount === null && quantity === null) {
-      assumptions.push("No amount or quantity found in the instruction.");
+      assumptions.push("You did not say how many or how much to spend");
     }
     if (targetPrice === null && targetPercent === null) {
-      assumptions.push("No price target found. Could not tell when to act.");
+      assumptions.push("You did not say what price to wait for");
     }
 
     // Confidence reflects how much we actually recovered, not how well the

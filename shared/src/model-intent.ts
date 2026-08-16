@@ -23,6 +23,30 @@ export interface ModelConfig {
   baseUrl?: string;
 }
 
+/**
+ * Would a person recognise this as something said to them?
+ *
+ * The prompt asks for plain English, and mostly gets it. But "both are null"
+ * reached a real confirmation screen, and this text sits directly above a
+ * button that spends money. A dropped line costs a little context; a line
+ * about null values costs the user's trust in the whole screen.
+ */
+const JARGON =
+  /\b(null|undefined|targetprice|targetpercent|spendtoken|buytoken|json|field|parameter|parsed?|extraction|confidence|boolean|string value|set to)\b/i;
+
+/**
+ * The other tell: quoting one of our own enum values back at the user, as in
+ * `direction is assumed to be 'below'`. Readable as English, but it is the
+ * model narrating its output shape rather than telling someone what will
+ * happen to their money.
+ */
+const QUOTED_ENUM = /['"](below|above|catch|auto)['"]/i;
+
+function readableToAPerson(line: string): boolean {
+  const trimmed = line.trim();
+  return trimmed.length > 0 && !JARGON.test(trimmed) && !QUOTED_ENUM.test(trimmed);
+}
+
 export class ModelIntentExtractor implements IntentExtractor {
   private fallback = new PatternIntentExtractor();
 
@@ -126,7 +150,10 @@ export class ModelIntentExtractor implements IntentExtractor {
         : 0.5;
 
     const assumptions = Array.isArray(parsed.assumptions)
-      ? parsed.assumptions.filter((a): a is string => typeof a === "string").slice(0, 8)
+      ? parsed.assumptions
+          .filter((a): a is string => typeof a === "string")
+          .filter(readableToAPerson)
+          .slice(0, 8)
       : [];
 
     return {

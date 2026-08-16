@@ -28,7 +28,7 @@ const bodySchema = z.object({
         value: z.number().finite().nonnegative(),
         currency: z.string().max(8),
         raw: z.string().max(64),
-        source: z.enum(["json-ld", "microdata", "meta", "guessed"]),
+        source: z.enum(["json-ld", "microdata", "meta", "guessed", "corrected"]),
       })
       .optional(),
     extraCosts: z

@@ -18,6 +18,16 @@ const CONFIDENCE_FLOOR = 0.6;
 const APP_URL = import.meta.env.VITE_APP_URL ?? "http://localhost:3001";
 
 /**
+ * Which chain the vault this build talks to lives on.
+ *
+ * This was a hardcoded "Testnet" string, which kept claiming testnet long
+ * after the contracts moved to mainnet. A label nobody updates is worse than
+ * no label: it is the one piece of the UI a reviewer will take at face value.
+ */
+const NETWORK = import.meta.env.VITE_NETWORK === "mainnet" ? "mainnet" : "testnet";
+const NETWORK_LABEL = NETWORK === "mainnet" ? "X Layer" : "Testnet";
+
+/**
  * Pages whose asset can actually be bought on-chain. Everything else can be
  * watched — from the user's own browser, with their session and region — but
  * not purchased, because we have no payment rails into ordinary shops.
@@ -83,6 +93,8 @@ export default function App() {
   const [reading, setReading] = useState<PageReading | null>(null);
   /** Set when the person asks to see a price we judged irrelevant. */
   const [priceForced, setPriceForced] = useState(false);
+  /** A price the person corrected by hand. Overrides whatever we scraped. */
+  const [priceOverride, setPriceOverride] = useState<number | null>(null);
   const [instruction, setInstruction] = useState("");
   const [draft, setDraft] = useState<IntentDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +107,27 @@ export default function App() {
     void runCapture();
     void refreshWatches();
   }, []);
+
+  /**
+   * The capture everything else works from.
+   *
+   * A price the person corrected by hand is folded in here rather than at the
+   * point it is displayed, so the instruction parser, the watch it creates and
+   * the mandate it opens all agree with what is on screen. Correcting a number
+   * that only changes the label would be worse than not offering to correct it.
+   */
+  const activeCapture: PageCapture | null =
+    capture && priceOverride !== null && capture.primaryPrice
+      ? {
+          ...capture,
+          primaryPrice: {
+            ...capture.primaryPrice,
+            value: priceOverride,
+            raw: String(priceOverride),
+            source: "corrected",
+          },
+        }
+      : capture;
 
   async function refreshWatches() {
     setWatches(await listWatches());
@@ -178,7 +211,7 @@ export default function App() {
    * depend on a server to function — offline capture-and-watch is the promise.
    */
   async function runExtract() {
-    if (!capture || !instruction.trim()) return;
+    if (!activeCapture || !instruction.trim()) return;
     setStage("extracting");
     setActionError(null);
 
@@ -190,7 +223,7 @@ export default function App() {
         const res = await fetch(`${APP_URL}/api/intent`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ capture, instruction: text }),
+          body: JSON.stringify({ capture: activeCapture, instruction: text }),
           signal: controller.signal,
         });
         if (res.ok) {
@@ -202,11 +235,11 @@ export default function App() {
       } finally {
         clearTimeout(timeout);
       }
-      setDraft(await extractor.extract(capture, text));
+      setDraft(await extractor.extract(activeCapture, text));
       setStage("review");
     } catch {
       try {
-        setDraft(await extractor.extract(capture, text));
+        setDraft(await extractor.extract(activeCapture, text));
         setStage("review");
       } catch {
         setError("Could not understand that instruction. Try rephrasing it.");
@@ -221,12 +254,12 @@ export default function App() {
    * reason to hold access to every site they visit.
    */
   async function startWatching() {
-    if (!capture || !draft) return;
+    if (!activeCapture || !draft) return;
     setActionError(null);
 
     let origin: string;
     try {
-      origin = `${new URL(capture.url).origin}/*`;
+      origin = `${new URL(activeCapture.url).origin}/*`;
     } catch {
       setActionError("This page's address can't be watched.");
       return;
@@ -245,13 +278,13 @@ export default function App() {
     setBusy(true);
     try {
       const basis = basisForTarget(draft.targetPercent !== null, draft.targetPrice !== null);
-      const price = capture.primaryPrice;
-      const shipping = capture.extraCosts?.shipping?.value ?? null;
+      const price = activeCapture.primaryPrice;
+      const shipping = activeCapture.extraCosts?.shipping?.value ?? null;
 
       const watch: Watch = {
         id: crypto.randomUUID().replace(/-/g, "").slice(0, 16),
-        url: capture.url,
-        title: capture.title || capture.url,
+        url: activeCapture.url,
+        title: activeCapture.title || activeCapture.url,
         basePrice: price?.value ?? draft.targetPrice ?? 0,
         baseDelivered: price && shipping !== null ? price.value + shipping : null,
         currency: price?.currency ?? "USD",
@@ -264,7 +297,7 @@ export default function App() {
         expiresAt: new Date(Date.now() + DEFAULT_TTL_DAYS * 86_400_000).toISOString(),
         lastCheckedAt: null,
         lastSeenPrice: price?.value ?? null,
-        lastStock: capture.availability === "out-of-stock" ? "out" : "unknown",
+        lastStock: activeCapture.availability === "out-of-stock" ? "out" : "unknown",
         status: "active",
         failures: 0,
       };
@@ -282,14 +315,14 @@ export default function App() {
 
   /** Hand the draft to the web app, where the user signs with their wallet. */
   async function createMandate() {
-    if (!capture || !draft) return;
+    if (!activeCapture || !draft) return;
     setBusy(true);
     setActionError(null);
     try {
       const res = await fetch(`${APP_URL}/api/drafts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ capture, draft }),
+        body: JSON.stringify({ capture: activeCapture, draft }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -320,13 +353,14 @@ export default function App() {
       {stage === "capturing" && <Capturing />}
       {stage === "error" && <ErrorState message={error} onRetry={runCapture} />}
 
-      {(stage === "ready" || stage === "extracting") && capture && (
+      {(stage === "ready" || stage === "extracting") && activeCapture && (
         <>
           <CaptureCard
-            capture={capture}
+            capture={activeCapture}
             reading={reading}
             priceForced={priceForced}
             onForcePrice={() => setPriceForced(true)}
+            onCorrectPrice={setPriceOverride}
           />
           <InstructionField
             value={instruction}
@@ -338,10 +372,10 @@ export default function App() {
         </>
       )}
 
-      {stage === "review" && draft && capture && (
+      {stage === "review" && draft && activeCapture && (
         <ReviewCard
           draft={draft}
-          capture={capture}
+          capture={activeCapture}
           busy={busy}
           actionError={actionError}
           onBack={() => setStage("ready")}
@@ -375,7 +409,7 @@ function Header() {
           ↗ dashboard
         </span>
       </button>
-      <span className="text-xs text-ink-faint">Testnet</span>
+      <span className="text-xs text-ink-faint">{NETWORK_LABEL}</span>
     </header>
   );
 }
@@ -410,14 +444,18 @@ function CaptureCard({
   reading,
   priceForced,
   onForcePrice,
+  onCorrectPrice,
 }: {
   capture: PageCapture;
   reading: PageReading | null;
   priceForced: boolean;
   onForcePrice: () => void;
+  onCorrectPrice: (value: number | null) => void;
 }) {
   const extra = capture.extraCosts;
   const shipping = extra?.shipping;
+  const [correcting, setCorrecting] = useState(false);
+  const [typed, setTyped] = useState("");
 
   /**
    * Whether to lead with the price at all.
@@ -431,10 +469,31 @@ function CaptureCard({
    * button, because occasionally we are the ones who are wrong.
    */
   const priceIsRelevant = reading ? reading.priceIsActionable : true;
+  // The correction is already folded into `capture` upstream, so everything
+  // here and everything downstream see the same number.
   const price = priceIsRelevant || priceForced ? capture.primaryPrice : undefined;
+
   const money = price ? formatMoney(price.value, price.currency) : null;
   const symbol = money?.symbol;
   const landed = price && shipping ? price.value + shipping.value : null;
+
+  /**
+   * Other prices we saw on the page, in the order they appeared.
+   *
+   * Captured all along and never shown, which made "check it is the right one"
+   * a dead end: we raised a doubt and gave nobody a way to settle it. The
+   * candidates are usually the real answer sitting two places down the list.
+   */
+  const others = capture.priceCandidates
+    .filter((c) => c !== price?.raw)
+    .slice(0, 5);
+
+  function commitTyped() {
+    const value = Number(typed.replace(/[^0-9.]/g, ""));
+    if (Number.isFinite(value) && value > 0) onCorrectPrice(value);
+    setCorrecting(false);
+    setTyped("");
+  }
 
   /**
    * Only mention delivery and tax where they could exist.
@@ -498,8 +557,72 @@ function CaptureCard({
           </p>
         ) : null}
 
+        {price?.source === "corrected" && (
+          <p className="note note-accent">
+            Using the price you set.{" "}
+            <button
+              type="button"
+              onClick={() => onCorrectPrice(null)}
+              className="underline underline-offset-2"
+            >
+              Undo
+            </button>
+          </p>
+        )}
+
+        {/* A guess, with a way out of it. The warning on its own only told
+            someone their number might be wrong and left them there. */}
         {price?.source === "guessed" && (
-          <p className="note note-warn">Price guessed from page text. Check it is the right one</p>
+          <>
+            <p className="note note-warn">Price guessed from page text. Is this the right one?</p>
+
+            {!correcting ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {others.map((candidate) => (
+                  <button
+                    key={candidate}
+                    type="button"
+                    onClick={() => {
+                      const value = Number(candidate.replace(/[^0-9.]/g, ""));
+                      if (Number.isFinite(value) && value > 0) onCorrectPrice(value);
+                    }}
+                    className="btn-ghost px-2 py-1 text-xs tabular-nums"
+                  >
+                    {candidate}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setCorrecting(true)}
+                  className="px-1 py-1 text-xs text-accent-bright underline underline-offset-2"
+                >
+                  {others.length ? "Type it" : "Set the price"}
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <input
+                  autoFocus
+                  value={typed}
+                  onChange={(e) => setTyped(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitTyped();
+                    if (e.key === "Escape") setCorrecting(false);
+                  }}
+                  placeholder={symbol ?? "$"}
+                  inputMode="decimal"
+                  className="field w-24 px-2 py-1 text-xs tabular-nums"
+                />
+                <button
+                  type="button"
+                  onClick={commitTyped}
+                  className="btn-ghost px-2 py-1 text-xs"
+                >
+                  Use this
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {/* We found a number but judged it irrelevant. Say so, and offer it

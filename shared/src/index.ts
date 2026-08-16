@@ -26,12 +26,15 @@ export type Hex = `0x${string}`;
  * that also contains shipping, variants and related items. The UI shows lower
  * confidence differently, because "we guessed" and "the page told us" should
  * not look identical to someone about to commit money.
+ *
+ * "corrected" outranks all of them. It means the person looked at our guess,
+ * saw it was wrong, and told us the real number.
  */
 export interface PagePrice {
   value: number;
   currency: string;
   raw: string;
-  source: "json-ld" | "microdata" | "meta" | "guessed";
+  source: "json-ld" | "microdata" | "meta" | "guessed" | "corrected";
 }
 
 /**

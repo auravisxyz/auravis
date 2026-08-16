@@ -21,6 +21,45 @@ Then it watches. When your condition is met it either prepares the swap and asks
 you to confirm, or executes it itself, depending on the mode you chose. Either
 way it writes down what it did, and why.
 
+### Reading the page, not scraping it
+
+A price-shaped string exists on plenty of pages where it means nothing: an
+article quoting last year's figure, a sidebar advert, a footer. So before
+anything else, the extension asks a model what kind of page this is, and gets
+back what the page is about, whether the price is something you could act on,
+and whether delivery or tax apply here at all.
+
+That decides what you see. A shop page warns that delivery and tax come on top.
+A token chart does not, because they do not exist there. An article shows no
+price at all, only a quiet offer to show one anyway, because sometimes the
+judgment is wrong and burying the number would be its own kind of guessing.
+
+Where the price had to be guessed from page text, the other prices we found are
+offered as one-tap corrections, alongside a field to type the real one. A
+warning that gives you no way to act on it is not honesty, it is just a
+disclaimer.
+
+If the model is unreachable, every one of these falls back to a local heuristic
+and the extension keeps working offline.
+
+### Understanding what you asked for
+
+Three different numbers turn up in these sentences and they are not
+interchangeable:
+
+| You type | It reads |
+|---|---|
+| `buy 83$ if price drops 8%` | spend $83, when it falls 8% |
+| `buy 1 if price drops to 82$` | one unit, when it reaches $82 |
+| `buy at 85$ if price drops 8%` | trigger at $85, and 8% down |
+| `buy two when it goes under 40` | two units, when it falls below $40 |
+
+Money can lead or trail the number, be written as a word, carry separators and
+decimals, or be a ticker. A count can be a digit or a word. A threshold works
+with or without a currency symbol. Every case above, and about twenty more, is
+pinned in `shared/src/intent.test.ts`, because each one was broken at some
+point and read as if it worked.
+
 ### Why the cap is on-chain
 
 Agent products today enforce spending limits in the prompt. Prompts can be argued
