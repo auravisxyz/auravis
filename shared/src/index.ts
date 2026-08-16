@@ -226,3 +226,6 @@ export { PatternIntentExtractor, INTENT_SYSTEM_PROMPT } from "./intent.js";
 export type { IntentExtractor } from "./intent.js";
 export { ModelIntentExtractor } from "./model-intent.js";
 export type { ModelConfig } from "./model-intent.js";
+export { HeuristicPageReader, PAGE_READ_SYSTEM_PROMPT } from "./page-read.js";
+export type { PageKind, PageReader, PageReading } from "./page-read.js";
+export { ModelPageReader } from "./model-page-read.js";

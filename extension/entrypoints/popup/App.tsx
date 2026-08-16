@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { IntentDraft, PageCapture, WatchBasis } from "@auravis/shared";
-import { PatternIntentExtractor, basisForTarget } from "@auravis/shared";
+import type { IntentDraft, PageCapture, PageReading, WatchBasis } from "@auravis/shared";
+import { HeuristicPageReader, PatternIntentExtractor, basisForTarget } from "@auravis/shared";
 import { capturePage } from "../../lib/capture.js";
 import {
   addWatch,
@@ -73,9 +73,16 @@ type Stage =
 
 const extractor = new PatternIntentExtractor();
 
+/** Local fallback when the dashboard can't be reached. Never fails. */
+const pageReader = new HeuristicPageReader();
+
 export default function App() {
   const [stage, setStage] = useState<Stage>("capturing");
   const [capture, setCapture] = useState<PageCapture | null>(null);
+  /** What kind of page this is. Null until the read lands, or if it never does. */
+  const [reading, setReading] = useState<PageReading | null>(null);
+  /** Set when the person asks to see a price we judged irrelevant. */
+  const [priceForced, setPriceForced] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [draft, setDraft] = useState<IntentDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -115,9 +122,52 @@ export default function App() {
 
       setCapture(result);
       setStage("ready");
+      void runPageRead(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStage("error");
+    }
+  }
+
+  /**
+   * Ask what kind of page this is, in the background.
+   *
+   * Scraping can tell us a price-shaped string exists. It cannot tell us
+   * whether a price means anything here, which is why the popup used to warn
+   * about delivery on a token chart and announce a number on a news article.
+   *
+   * Deliberately not awaited by runCapture: the capture renders immediately
+   * and this folds in when it lands. If it never lands, the UI stays in its
+   * pre-reading state, which is the old behaviour and still usable.
+   */
+  async function runPageRead(target: PageCapture) {
+    setReading(null);
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6_000);
+      try {
+        const res = await fetch(`${APP_URL}/api/page-read`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ capture: target }),
+          signal: controller.signal,
+        });
+        if (res.ok) {
+          const body = (await res.json()) as { reading: PageReading };
+          setReading(body.reading);
+          return;
+        }
+      } finally {
+        clearTimeout(timeout);
+      }
+      setReading(await pageReader.read(target));
+    } catch {
+      // Offline or slow. The heuristic is local and cannot fail on network.
+      try {
+        setReading(await pageReader.read(target));
+      } catch {
+        /* leave unread; the card handles a null reading */
+      }
     }
   }
 
@@ -272,7 +322,12 @@ export default function App() {
 
       {(stage === "ready" || stage === "extracting") && capture && (
         <>
-          <CaptureCard capture={capture} />
+          <CaptureCard
+            capture={capture}
+            reading={reading}
+            priceForced={priceForced}
+            onForcePrice={() => setPriceForced(true)}
+          />
           <InstructionField
             value={instruction}
             onChange={setInstruction}
@@ -350,10 +405,33 @@ function ErrorState({ message, onRetry }: { message: string | null; onRetry: () 
  * caveat is a single quiet line under a hairline. Warnings inform — they
  * don't get boxes to shout from.
  */
-function CaptureCard({ capture }: { capture: PageCapture }) {
-  const price = capture.primaryPrice;
+function CaptureCard({
+  capture,
+  reading,
+  priceForced,
+  onForcePrice,
+}: {
+  capture: PageCapture;
+  reading: PageReading | null;
+  priceForced: boolean;
+  onForcePrice: () => void;
+}) {
   const extra = capture.extraCosts;
   const shipping = extra?.shipping;
+
+  /**
+   * Whether to lead with the price at all.
+   *
+   * A price-shaped string exists on plenty of pages where it means nothing:
+   * an article quoting last year's figure, a footer, a sidebar ad. Announcing
+   * a number there is a confident wrong answer, which is worse than no answer.
+   *
+   * So the price only becomes the hero when the reading says it is something
+   * a person could act on. Where it isn't, the number is still there behind a
+   * button, because occasionally we are the ones who are wrong.
+   */
+  const priceIsRelevant = reading ? reading.priceIsActionable : true;
+  const price = priceIsRelevant || priceForced ? capture.primaryPrice : undefined;
   const money = price ? formatMoney(price.value, price.currency) : null;
   const symbol = money?.symbol;
   const landed = price && shipping ? price.value + shipping.value : null;
@@ -361,14 +439,17 @@ function CaptureCard({ capture }: { capture: PageCapture }) {
   /**
    * Only mention delivery and tax where they could exist.
    *
-   * A CoinGecko price chart has no shipping, and saying "delivery and tax not
-   * included" there is noise that makes the real warning on a shop page easier
-   * to ignore. We treat detectable stock state as the tell — pages that talk
-   * about being in or out of stock are selling something; a price chart isn't.
+   * Saying "delivery and tax not included" on a token chart is noise, and
+   * noise makes the real warning on a shop page easier to ignore. Before, the
+   * tell was stock keywords, which missed shops that don't use the phrase and
+   * fired on articles that quote it. Now the page reading decides, and falls
+   * back to the old heuristic only when no reading arrived.
    */
-  const looksLikeShop =
-    capture.availability === "in-stock" || capture.availability === "out-of-stock";
-  const showsShippingCaveat = Boolean(price && (looksLikeShop || extra?.taxAtCheckout));
+  const deliveryApplies = reading
+    ? reading.deliveryApplies
+    : capture.availability === "in-stock" || capture.availability === "out-of-stock";
+  const taxAtCheckout = reading?.taxAtCheckout ?? extra?.taxAtCheckout ?? false;
+  const showsShippingCaveat = Boolean(price && (deliveryApplies || taxAtCheckout));
 
   return (
     <section className="glass-panel rise flex flex-col gap-3 p-5">
@@ -394,37 +475,49 @@ function CaptureCard({ capture }: { capture: PageCapture }) {
         )}
 
         {price && (
-          <p className="line-clamp-1 text-sm text-ink-muted">{capture.title || "Untitled page"}</p>
+          <p className="line-clamp-1 text-sm text-ink-muted">
+            {reading?.subject || capture.title || "Untitled page"}
+          </p>
         )}
       </div>
 
-      {(landed !== null || showsShippingCaveat || price?.source === "guessed" || !price) && (
-        <>
-          <div className="hairline" />
-          <div className="flex flex-col gap-1.5">
-            {landed !== null ? (
-              <p className="note">
-                About {formatMoney(landed, price!.currency).text} delivered
-                {extra?.taxAtCheckout && ", before tax"}
-              </p>
-            ) : showsShippingCaveat ? (
-              <p className="note">
-                {extra?.taxAtCheckout
-                  ? "Delivery and tax added at checkout"
-                  : "Delivery and tax not included"}
-              </p>
-            ) : null}
+      <div className="hairline" />
+      <div className="flex flex-col gap-1.5">
+        {/* What the agent understood this page to be. The one line that shows
+            it read the page rather than pattern-matched it. */}
+        {reading?.note && <p className="note note-accent">{reading.note}</p>}
 
-            {price?.source === "guessed" && (
-              <p className="note note-warn">
-                Price guessed from page text. Check it is the right one
-              </p>
-            )}
+        {landed !== null ? (
+          <p className="note">
+            About {formatMoney(landed, price!.currency).text} delivered
+            {taxAtCheckout && ", before tax"}
+          </p>
+        ) : showsShippingCaveat ? (
+          <p className="note">
+            {taxAtCheckout ? "Delivery and tax added at checkout" : "Delivery and tax not included"}
+          </p>
+        ) : null}
 
-            {!price && <p className="note">No price found. Name one in your instruction</p>}
-          </div>
-        </>
-      )}
+        {price?.source === "guessed" && (
+          <p className="note note-warn">Price guessed from page text. Check it is the right one</p>
+        )}
+
+        {/* We found a number but judged it irrelevant. Say so, and offer it
+            anyway rather than hiding a decision the person can overrule. */}
+        {!price && capture.primaryPrice && (
+          <button
+            type="button"
+            onClick={onForcePrice}
+            className="self-start text-xs text-accent-bright underline underline-offset-2"
+          >
+            Show the {capture.primaryPrice.raw} on this page anyway
+          </button>
+        )}
+
+        {!price && !capture.primaryPrice && (
+          <p className="note">No price on this page. Name one in your instruction</p>
+        )}
+      </div>
     </section>
   );
 }
