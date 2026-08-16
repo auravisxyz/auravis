@@ -3,7 +3,7 @@ import { config } from "./config.js";
 import { publicClient, agentAccount, activeChain } from "./chain.js";
 import { auravisMandateAbi } from "./abi/AuravisMandate.js";
 import { canExecute, executeMandate, getMandate } from "./mandate.js";
-import { getSwapQuote } from "./swap.js";
+import { buildRoute } from "./execution.js";
 
 /**
  * The first live execute(). Dry-run by default:
@@ -46,23 +46,23 @@ async function main() {
     process.exit(1);
   }
 
-  // 2. Fresh quote. The vault is the caller on-chain, so it must be the
-  //    userWalletAddress — quoting for the agent would build calldata that
-  //    pays the agent, which our own price floor would then reject.
-  const quote = await getSwapQuote({
-    fromToken: mandate.spendToken as Address,
-    toToken: mandate.buyToken as Address,
-    amount: SPEND,
-    vaultAddress: config.mandateAddress as Address,
-    slippagePercent: "0.5",
-  });
+  // 2. Build the route — DemoRouter when configured (the OKX aggregator
+  //    rejects contract callers on X Layer), OKX aggregator otherwise.
+  const route = await buildRoute(
+    mandate.spendToken as Address,
+    mandate.buyToken as Address,
+    SPEND,
+  );
+  if ("error" in route) {
+    console.error(`\n${route.error}`);
+    process.exit(1);
+  }
 
-  console.log(`\nquote:`);
-  console.log(`  router      ${quote.router}`);
-  console.log(`  expect out  ${formatUnits(quote.toTokenAmount, 6)}`);
-  console.log(`  min out     ${formatUnits(quote.minReceiveAmount, 6)}`);
-  console.log(`  impact      ${quote.priceImpactPercent}%`);
-  console.log(`  calldata    ${quote.data.slice(0, 42)}… (${(quote.data.length - 2) / 2} bytes)`);
+  console.log(`\nroute:`);
+  console.log(`  router      ${route.router}`);
+  console.log(`  ${route.description}`);
+  console.log(`  min out     ${route.minOut === 0n ? "(owner floor binds)" : formatUnits(route.minOut, 6)}`);
+  console.log(`  calldata    ${route.data.slice(0, 42)}… (${(route.data.length - 2) / 2} bytes)`);
 
   // 3. Confirm the router the quote wants is actually allowlisted. The contract
   //    would revert anyway, but a clear message beats decoding a revert.
@@ -70,7 +70,7 @@ async function main() {
     address: config.mandateAddress as Address,
     abi: auravisMandateAbi,
     functionName: "allowedRouters",
-    args: [quote.router],
+    args: [route.router],
   });
   console.log(`\nrouter allowlisted: ${allowlisted}`);
   if (!allowlisted) {
@@ -83,8 +83,8 @@ async function main() {
   //    takes whichever is stricter — so passing this can only tighten, never
   //    loosen, what the owner set.
   const ownerFloor = (SPEND * mandate.minOutPerUnit) / 10n ** 18n;
-  console.log(`\nfloors: owner ${formatUnits(ownerFloor, 6)}, quote ${formatUnits(quote.minReceiveAmount, 6)}`);
-  console.log(`  binding: ${quote.minReceiveAmount > ownerFloor ? "quote" : "owner"}`);
+  console.log(`\nfloors: owner ${formatUnits(ownerFloor, 6)}, route ${route.minOut === 0n ? "none" : formatUnits(route.minOut, 6)}`);
+  console.log(`  binding: ${route.minOut > ownerFloor ? "route" : "owner"}`);
 
   const gas = await publicClient.getBalance({ address: agentAccount.address });
   console.log(`\nagent OKB: ${formatUnits(gas, 18)}`);
@@ -102,11 +102,11 @@ async function main() {
   console.log("\nSending execute()…");
   const hash = await executeMandate({
     id: MANDATE_ID,
-    router: quote.router,
-    swapData: quote.data,
+    router: route.router,
+    swapData: route.data,
     declaredIn: SPEND,
-    minOut: quote.minReceiveAmount,
-    reason: `Swapped ${formatUnits(SPEND, 6)} USDT for USDC at ${quote.priceImpactPercent}% impact.`,
+    minOut: route.minOut,
+    reason: `Swapped ${formatUnits(SPEND, 6)} USDT for USDC ${route.description}.`,
   });
   console.log(`  tx ${hash}`);
 

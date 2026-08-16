@@ -15,7 +15,11 @@
     "setup:mainnet": "tsx src/setup-mainnet.ts",
     "execute:mainnet": "tsx src/execute-mainnet.ts",
     "balances": "tsx src/balances.ts",
-    "tokens": "tsx src/tokens.ts"
+    "tokens": "tsx src/tokens.ts",
+    "diagnose": "tsx src/diagnose-swap.ts",
+    "routes": "tsx src/try-routes.ts",
+    "owner:swap": "tsx src/owner-swap.ts",
+    "fund:router": "tsx src/fund-router.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

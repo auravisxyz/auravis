@@ -11,28 +11,28 @@
  * used for anything routine.
  */
 @theme {
-  --color-canvas: oklch(0.14 0.03 252);
-  --color-canvas-deep: oklch(0.11 0.024 258);
+  --color-canvas: oklch(0.24 0.05 257);
+  --color-canvas-deep: oklch(0.19 0.045 260);
 
-  --color-surface: oklch(0.32 0.05 252 / 0.4);
-  --color-surface-raised: oklch(0.42 0.055 252 / 0.42);
-  --color-line: oklch(0.75 0.05 252 / 0.18);
-  --color-edge: oklch(0.92 0.03 252 / 0.14);
+  --color-surface: oklch(0.45 0.065 253 / 0.42);
+  --color-surface-raised: oklch(0.53 0.07 250 / 0.46);
+  --color-line: oklch(0.85 0.04 250 / 0.28);
+  --color-edge: oklch(0.97 0.02 250 / 0.24);
 
   --color-ink: oklch(0.97 0.008 252);
-  --color-ink-muted: oklch(0.79 0.022 252);
-  --color-ink-faint: oklch(0.6 0.028 252);
+  --color-ink-muted: oklch(0.86 0.02 250);
+  --color-ink-faint: oklch(0.7 0.03 252);
 
-  --color-accent: oklch(0.64 0.2 256);
-  --color-accent-bright: oklch(0.76 0.15 248);
+  --color-accent: oklch(0.67 0.21 256);
+  --color-accent-bright: oklch(0.8 0.13 242);
   --color-accent-deep: oklch(0.48 0.21 262);
   --color-accent-ink: oklch(0.98 0.008 250);
-  --color-accent-glow: oklch(0.6 0.2 256 / 0.35);
+  --color-accent-glow: oklch(0.65 0.2 255 / 0.5);
 
   --color-signal: oklch(0.6 0.24 22);
   --color-signal-glow: oklch(0.6 0.24 22 / 0.3);
 
-  --color-warn: oklch(0.83 0.14 85);
+  --color-warn: oklch(0.86 0.14 85);
   --color-danger: oklch(0.68 0.19 25);
 
   --radius-card: 1rem;
@@ -54,9 +54,10 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(60rem 40rem at 80% -10%, var(--color-accent-glow), transparent 60%),
-    radial-gradient(45rem 30rem at -10% 55%, oklch(0.5 0.16 280 / 0.2), transparent 65%),
-    radial-gradient(55rem 38rem at 60% 120%, oklch(0.55 0.14 230 / 0.16), transparent 60%);
+    radial-gradient(60rem 42rem at 78% -8%, oklch(0.6 0.19 255 / 0.5), transparent 62%),
+    radial-gradient(50rem 36rem at -12% 30%, oklch(0.55 0.18 285 / 0.4), transparent 65%),
+    radial-gradient(56rem 40rem at 55% 118%, oklch(0.62 0.14 215 / 0.35), transparent 62%),
+    radial-gradient(30rem 20rem at 30% 8%, oklch(0.78 0.11 155 / 0.14), transparent 60%);
 }
 
 html,
@@ -199,4 +200,158 @@ body {
 .dot-danger {
   background-color: var(--color-danger);
   box-shadow: 0 0 6px var(--color-signal-glow);
+}
+
+/* --- Atmosphere -------------------------------------------------------------
+   Three layers give the page a world instead of a void:
+   1. body::before — stationary aurora pools (colour)
+   2. .aurora-ribbon — one huge blurred conic gradient, slowly rotating (life)
+   3. body::after — film grain (texture; flat digital black reads as unfinished)
+*/
+
+.aurora-ribbon {
+  position: fixed;
+  inset: -25%;
+  z-index: -1;
+  pointer-events: none;
+  filter: blur(70px) saturate(130%);
+  opacity: 0.45;
+  background: conic-gradient(
+    from 180deg at 50% 42%,
+    transparent 0deg,
+    oklch(0.62 0.21 255 / 0.55) 55deg,
+    transparent 115deg,
+    oklch(0.56 0.19 288 / 0.45) 190deg,
+    transparent 250deg,
+    oklch(0.72 0.13 160 / 0.3) 315deg,
+    transparent 360deg
+  );
+  animation: aurora-drift 48s linear infinite;
+}
+
+@keyframes aurora-drift {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora-ribbon {
+    animation: none;
+  }
+}
+
+/* Headline accent: the aurora, as type. */
+.text-aurora {
+  background-image: linear-gradient(
+    92deg,
+    var(--color-accent-bright),
+    oklch(0.78 0.13 200) 45%,
+    oklch(0.8 0.14 160) 90%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Icon tile — icons get a seat, not just a spot in the text flow. */
+.tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  flex-shrink: 0;
+  border-radius: var(--radius-control);
+  background-color: oklch(0.65 0.2 255 / 0.16);
+  border: 1px solid oklch(0.75 0.15 250 / 0.28);
+  color: var(--color-accent-bright);
+}
+
+/* Example-instruction chip: the product's voice, quoted. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 9999px;
+  border: 1px solid var(--color-edge);
+  background-color: oklch(0.5 0.07 252 / 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-size: 0.75rem;
+  color: var(--color-ink-muted);
+}
+.chip::before {
+  content: "";
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 9999px;
+  background-color: var(--color-accent-bright);
+  box-shadow: 0 0 6px var(--color-accent-glow);
+}
+
+/* Glass gets a light source: a sheen falling from the top edge. */
+.glass-panel {
+  background-image: linear-gradient(oklch(1 0 0 / 0.06), transparent 45%);
+}
+
+/* --- Brand marks ----------------------------------------------------------
+   The aura: the icon's glow, reproduced in CSS. Small inline mark for nav and
+   footer; large breathing orb for the hero. */
+
+.aura-mark {
+  display: inline-block;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle at 38% 35%, oklch(0.85 0.1 150 / 0.9), transparent 42%),
+    radial-gradient(circle at 45% 45%, var(--color-accent-bright), var(--color-accent-deep) 75%);
+  box-shadow: 0 0 10px var(--color-accent-glow);
+}
+
+.aura-orb {
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle at 38% 32%, oklch(0.88 0.09 150 / 0.95), transparent 40%),
+    radial-gradient(circle at 46% 44%, var(--color-accent-bright), var(--color-accent-deep) 72%);
+  box-shadow:
+    0 0 44px var(--color-accent-glow),
+    0 0 120px oklch(0.55 0.18 262 / 0.25);
+  animation: breathe 4.5s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 44px var(--color-accent-glow),
+      0 0 120px oklch(0.55 0.18 262 / 0.25);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow:
+      0 0 60px var(--color-accent-glow),
+      0 0 150px oklch(0.55 0.18 262 / 0.32);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura-orb {
+    animation: none;
+  }
 }

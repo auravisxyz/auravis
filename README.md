@@ -92,6 +92,14 @@ so both independent guardrails have now held against a live agent.
 |---|---|---|
 | Testnet rehearsal vault | AuravisMandate | [`0x4b842c68…`](https://www.okx.com/web3/explorer/xlayer-test/address/0x4b842c68194042Fe559d2B924Aa32dFFFbfDB3b8) |
 
+## Findings from building on X Layer
+
+Building this surfaced real issues in the chain's own tooling — including an
+aggregator that quotes routes which revert on-chain for every caller. They're
+documented with reproduction steps in [docs/findings.md](docs/findings.md),
+because the honest version of "our on-chain limits held when the
+infrastructure didn't" is worth more than a demo where nothing went wrong.
+
 ## Development
 
 ```bash

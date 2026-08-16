@@ -24,14 +24,6 @@ interface DraftRecord {
   status: string;
 }
 
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-    };
-  }
-}
-
 export default function ConfirmClient({ draftId }: { draftId: string }) {
   const [stage, setStage] = useState<Stage>("loading");
   const [record, setRecord] = useState<DraftRecord | null>(null);

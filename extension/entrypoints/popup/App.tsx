@@ -417,11 +417,11 @@ function CaptureCard({ capture }: { capture: PageCapture }) {
 
             {price?.source === "guessed" && (
               <p className="note note-warn">
-                Price guessed from page text — check it&apos;s the right one
+                Price guessed from page text. Check it is the right one
               </p>
             )}
 
-            {!price && <p className="note">No price found — name one in your instruction</p>}
+            {!price && <p className="note">No price found. Name one in your instruction</p>}
           </div>
         </>
       )}
@@ -533,7 +533,7 @@ function ReviewCard({
       draft.direction === "below"
         ? price.value * (1 - draft.targetPercent / 100)
         : price.value * (1 + draft.targetPercent / 100);
-    targetLine = `${draft.targetPercent}% ${draft.direction === "below" ? "below" : "above"} the ${priceText} you see today — alerts at ${formatMoney(fireAt, price.currency).text}`;
+    targetLine = `${draft.targetPercent}% ${draft.direction === "below" ? "below" : "above"} the ${priceText} you see today. Alerts at ${formatMoney(fireAt, price.currency).text}`;
   } else if (draft.targetPrice !== null) {
     targetLine =
       basis === "delivered" && delivered !== null
@@ -565,13 +565,13 @@ function ReviewCard({
 
               {basis === "delivered" && delivered === null && draft.targetPrice !== null && (
                 <p className="note note-warn">
-                  Couldn&apos;t read delivery cost here — watching the listed price instead
+                  Could not read delivery cost here, so watching the listed price instead
                 </p>
               )}
 
               {wantsToBuy && !tradeable && (
                 <p className="note">
-                  Can&apos;t buy from this shop — I&apos;ll watch it and tell you the moment it
+                  Cannot buy from this shop. I will watch it and tell you the moment it
                   hits, so you buy in one click
                 </p>
               )}
@@ -591,8 +591,8 @@ function ReviewCard({
           <p className="note note-warn px-1">
             {!hasTarget && "Name a price or a percentage so I know when to act"}
             {percentWithoutPrice &&
-              "A percentage needs today's price as a baseline — use an absolute price here"}
-            {unsure && hasTarget && !percentWithoutPrice && "I'm not confident I understood — try rephrasing"}
+              "A percentage needs a starting price and this page did not give one. Use an exact price instead"}
+            {unsure && hasTarget && !percentWithoutPrice && "I am not sure I understood. Try saying it another way"}
           </p>
         )}
 
@@ -641,7 +641,7 @@ function ReviewCard({
 
         <p className="px-1 text-center text-xs text-ink-faint">
           {wantsToBuy && tradeable
-            ? "The cap is enforced on-chain — the agent cannot spend past it"
+            ? "The cap is enforced onchain. The agent cannot spend past it"
             : "Watched from your browser. This page never leaves your machine"}
         </p>
       </div>
@@ -664,7 +664,7 @@ function WatchDone({ watch, onClose }: { watch: Watch; onClose: () => void }) {
         </p>
       )}
       <p className="text-xs leading-relaxed text-ink-faint">
-        Checked every 30 minutes from this browser — your region, your prices.
+        Checked every 30 minutes from this browser. Your region, your prices.
         <br />
         Nothing about this page leaves your machine.
       </p>

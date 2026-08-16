@@ -15,31 +15,31 @@
  * Token NAMES are shared with web/app/globals.css — keep values in sync.
  */
 @theme {
-  --color-canvas: oklch(0.14 0.03 252);
-  --color-canvas-deep: oklch(0.11 0.024 258);
+  --color-canvas: oklch(0.24 0.05 257);
+  --color-canvas-deep: oklch(0.19 0.045 260);
 
   /* Translucent panes — the glass itself. */
-  --color-surface: oklch(0.32 0.05 252 / 0.4);
-  --color-surface-raised: oklch(0.42 0.055 252 / 0.42);
-  --color-line: oklch(0.75 0.05 252 / 0.18);
-  --color-edge: oklch(0.92 0.03 252 / 0.14);
+  --color-surface: oklch(0.45 0.065 253 / 0.42);
+  --color-surface-raised: oklch(0.53 0.07 250 / 0.46);
+  --color-line: oklch(0.85 0.04 250 / 0.28);
+  --color-edge: oklch(0.97 0.02 250 / 0.24);
 
   --color-ink: oklch(0.97 0.008 252);
-  --color-ink-muted: oklch(0.79 0.022 252);
-  --color-ink-faint: oklch(0.6 0.028 252);
+  --color-ink-muted: oklch(0.86 0.02 250);
+  --color-ink-faint: oklch(0.7 0.03 252);
 
   /* Confident electric blue. */
-  --color-accent: oklch(0.64 0.2 256);
-  --color-accent-bright: oklch(0.76 0.15 248);
+  --color-accent: oklch(0.67 0.21 256);
+  --color-accent-bright: oklch(0.8 0.13 242);
   --color-accent-deep: oklch(0.48 0.21 262);
   --color-accent-ink: oklch(0.98 0.008 250);
-  --color-accent-glow: oklch(0.6 0.2 256 / 0.35);
+  --color-accent-glow: oklch(0.65 0.2 255 / 0.5);
 
   /* Reserved: the chain saying no. */
   --color-signal: oklch(0.6 0.24 22);
   --color-signal-glow: oklch(0.6 0.24 22 / 0.3);
 
-  --color-warn: oklch(0.83 0.14 85);
+  --color-warn: oklch(0.86 0.14 85);
   --color-danger: oklch(0.68 0.19 25);
 
   --radius-card: 1rem;
@@ -75,9 +75,22 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(28rem 20rem at 85% -5%, var(--color-accent-glow), transparent 60%),
-    radial-gradient(22rem 16rem at -10% 45%, oklch(0.5 0.16 280 / 0.22), transparent 65%),
-    radial-gradient(30rem 22rem at 55% 115%, oklch(0.55 0.14 230 / 0.18), transparent 60%);
+    radial-gradient(28rem 20rem at 85% -5%, oklch(0.6 0.19 255 / 0.5), transparent 62%),
+    radial-gradient(22rem 16rem at -10% 40%, oklch(0.55 0.18 285 / 0.4), transparent 65%),
+    radial-gradient(30rem 22rem at 55% 115%, oklch(0.62 0.14 215 / 0.35), transparent 62%),
+    radial-gradient(16rem 11rem at 30% 8%, oklch(0.78 0.11 155 / 0.14), transparent 60%);
+}
+
+/* Film grain — same texture as the web app, so the two surfaces feel like one
+   product. Flat digital black reads as unfinished; this is the fix. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* --- Glass building blocks -------------------------------------------------
@@ -86,6 +99,7 @@ body::before {
 
 .glass-panel {
   background-color: var(--color-surface);
+  background-image: linear-gradient(oklch(1 0 0 / 0.06), transparent 45%);
   backdrop-filter: blur(20px) saturate(150%);
   -webkit-backdrop-filter: blur(20px) saturate(150%);
   border: 1px solid var(--color-edge);
@@ -150,7 +164,7 @@ body::before {
 
 /* Inputs sit *in* the glass, slightly darker than it. */
 .field {
-  background-color: oklch(0.16 0.03 254 / 0.55);
+  background-color: oklch(0.28 0.05 256 / 0.5);
   border: 1px solid var(--color-edge);
   border-radius: var(--radius-control);
   color: var(--color-ink);

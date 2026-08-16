@@ -25,6 +25,11 @@ const schema = z.object({
   MOCK_USDT_TESTNET: z.string().optional(),
   MOCK_USDC_TESTNET: z.string().optional(),
 
+  // Mainnet fallback router (contracts/src/mocks/DemoRouter.sol). Exists
+  // because the OKX aggregator's X Layer routes revert on-chain for every
+  // caller (vault and EOA alike) despite quoting fine. Real tokens, our router.
+  DEMO_ROUTER_MAINNET: z.string().optional(),
+
   // -- agent identity ----------------------------------------------------
   AGENT_PRIVATE_KEY: z.string().min(1, "AGENT_PRIVATE_KEY is required"),
   AGENT_POLL_INTERVAL_MS: z.coerce.number().default(15_000),
@@ -74,6 +79,7 @@ export const config = {
     env.NETWORK === "mainnet" ? env.MANDATE_ADDRESS_MAINNET : env.MANDATE_ADDRESS_TESTNET,
 
   mockRouter: env.MOCK_ROUTER_TESTNET as `0x${string}` | undefined,
+  demoRouter: env.DEMO_ROUTER_MAINNET as `0x${string}` | undefined,
   mockUsdt: env.MOCK_USDT_TESTNET as `0x${string}` | undefined,
   mockUsdc: env.MOCK_USDC_TESTNET as `0x${string}` | undefined,
 

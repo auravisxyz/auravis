@@ -41,8 +41,18 @@ export interface SwapQuoteParams {
 }
 
 export interface SwapQuote {
-  /** OKX DEX router — this is the address the owner must allowlist. */
+  /** OKX DEX router — the contract we CALL. */
   router: Address;
+  /**
+   * The contract that PULLS the tokens, which is NOT the router.
+   *
+   * OKX fronts its router with a separate token-approval proxy. Approving the
+   * router leaves the proxy with no allowance, the internal transferFrom
+   * fails, and the whole thing surfaces only as `RouterCallFailed` — no hint
+   * that the approval went to the wrong address. Returned by the API in
+   * `signatureData.approveContract`; falls back to the router when absent.
+   */
+  spender: Address;
   /** Calldata to hand to `execute()` as `swapData`. */
   data: Hex;
   /** Native value to send. Should be 0 for ERC-20 → ERC-20. */
@@ -128,6 +138,8 @@ export async function getSwapQuote(params: SwapQuoteParams): Promise<SwapQuote> 
         data?: string;
         value?: string;
         minReceiveAmount?: string;
+        /** JSON strings; one carries `approveContract`. */
+        signatureData?: string[];
       };
     }>;
   };
@@ -142,8 +154,23 @@ export async function getSwapQuote(params: SwapQuoteParams): Promise<SwapQuote> 
     throw new Error("OKX swap API returned no transaction data");
   }
 
+  // Dig the approval target out of signatureData. Each entry is a JSON string.
+  let spender = tx.to as Address;
+  for (const entry of tx.signatureData ?? []) {
+    try {
+      const parsed = JSON.parse(entry) as { approveContract?: string };
+      if (parsed.approveContract) {
+        spender = parsed.approveContract as Address;
+        break;
+      }
+    } catch {
+      // Not JSON, or a different payload shape. Keep looking.
+    }
+  }
+
   return {
     router: tx.to as Address,
+    spender,
     data: tx.data as Hex,
     value: BigInt(tx.value ?? "0"),
     minReceiveAmount: BigInt(tx.minReceiveAmount ?? "0"),

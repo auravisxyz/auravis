@@ -49,12 +49,30 @@ interface Route {
  * rehearsal rig, because the aggregator has no testnet deployment (error
  * 50026) — same `execute()` path, same enforcement, different liquidity.
  */
-async function buildRoute(
+export async function buildRoute(
   spendToken: Address,
   buyToken: Address,
   amountIn: bigint,
 ): Promise<Route | { error: string }> {
   if (config.network === "mainnet") {
+    // The OKX aggregator's X Layer routes for this pair revert on-chain for
+    // every caller we tested — vault AND plain EOA — while quoting fine.
+    // (Aug 15 2026; ticket pending.) Until routes actually fill, autonomous
+    // mainnet execution goes through our DemoRouter: real tokens, identical
+    // vault enforcement. NOTE: the Catch-mode widget likely rides the same
+    // routing — verify a manual widget swap on this pair before demo day.
+    if (config.demoRouter) {
+      return {
+        router: config.demoRouter,
+        data: encodeFunctionData({
+          abi: TESTNET_ROUTER_ABI,
+          functionName: "swap",
+          args: [amountIn],
+        }),
+        minOut: 0n, // the owner's on-chain floor binds
+        description: "via DemoRouter (real USDT→USDC; OKX aggregator routes currently revert on X Layer)",
+      };
+    }
     const quote = await getSwapQuote({
       fromToken: spendToken,
       toToken: buyToken,

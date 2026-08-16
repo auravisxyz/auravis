@@ -1,9 +1,9 @@
+import Link from "next/link";
 import { desc } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { activeChain, vaultAddress, network } from "@/lib/chain";
 import { readMandates, amount, type MandateView } from "@/lib/vault";
-import RefreshButton from "./RefreshButton";
-import AutoRefresh from "./AutoRefresh";
+import Gate from "./Gate";
 
 // The chain moves; don't serve a stale view of someone's spending limits.
 export const revalidate = 0;
@@ -34,22 +34,9 @@ export default async function Dashboard() {
   const explorer = activeChain.blockExplorers?.default.url;
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-10 lg:py-14">
-      {/* ---- Nav ---------------------------------------------------------- */}
-      <header className="rise flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col">
-          <h1 className="text-lg font-semibold tracking-tight text-ink">Auravis</h1>
-          <p className="text-xs text-ink-faint">Limits your agent cannot argue its way past</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <AutoRefresh />
-          <RefreshButton />
-          <span className="text-xs text-ink-faint">
-            {activeChain.name}
-          </span>
-        </div>
-      </header>
-
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-6 sm:px-6">
+      <Gate>
+      <div className="flex flex-col gap-8">
       {/* ---- The three numbers that matter -------------------------------- */}
       <section className="rise rise-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Stat label="Active mandates" value={String(active.length)} />
@@ -59,7 +46,7 @@ export default async function Dashboard() {
 
       {!vaultAddress && (
         <p className="note note-warn">
-          No vault configured — set NEXT_PUBLIC_MANDATE_ADDRESS_{network.toUpperCase()} in
+          No vault configured. Set NEXT_PUBLIC_MANDATE_ADDRESS_{network.toUpperCase()} in
           web/.env.local
         </p>
       )}
@@ -99,7 +86,7 @@ export default async function Dashboard() {
       </section>
 
       {/* ---- The feed ------------------------------------------------------ */}
-      <section className="rise rise-3 flex flex-col gap-3">
+      <section id="activity" className="rise rise-3 flex flex-col gap-3 scroll-mt-20">
         <h2 className="px-1 text-xs font-medium uppercase tracking-wider text-ink-faint">
           What it did, and why
         </h2>
@@ -122,6 +109,8 @@ export default async function Dashboard() {
           </ul>
         )}
       </section>
+      </div>
+      </Gate>
     </main>
   );
 }
@@ -227,6 +216,14 @@ function FeedEntry({
       </div>
       {entry.reason && (
         <p className="pl-4 text-sm leading-relaxed text-ink-muted">{entry.reason}</p>
+      )}
+      {entry.status === "pending" && (
+        <Link
+          href={`/catch/${entry.id}`}
+          className="pl-4 text-xs font-medium text-accent-bright underline-offset-2 hover:underline"
+        >
+          Review &amp; confirm →
+        </Link>
       )}
       {entry.txHash && explorer && (
         <a
