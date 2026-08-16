@@ -40,6 +40,13 @@ const schema = z.object({
   // model is that the owner key can overrule the agent key.
   OWNER_PRIVATE_KEY: z.string().optional(),
 
+  // -- public demo vault (testnet only) ----------------------------------
+  // Deliberately publishable. Every vault has one owner, so a reviewer with
+  // their own wallet can only ever look; this key hands them a vault of their
+  // own with nothing of value in it. Never used on mainnet.
+  DEMO_PRIVATE_KEY: z.string().optional(),
+  DEMO_VAULT_TESTNET: z.string().optional(),
+
   // -- deployer identity -------------------------------------------------
   // Owns DemoRouter, so it is the only key that can move the demo's rate
   // lever (`npm run set:rate`). Nothing else reads it.
@@ -95,6 +102,8 @@ export const config = {
 
   ownerPrivateKey: env.OWNER_PRIVATE_KEY as `0x${string}` | undefined,
   deployerPrivateKey: env.DEPLOYER_PRIVATE_KEY as `0x${string}` | undefined,
+  demoPrivateKey: env.DEMO_PRIVATE_KEY as `0x${string}` | undefined,
+  demoVault: env.DEMO_VAULT_TESTNET as `0x${string}` | undefined,
 
   okx: {
     apiKey: env.OKX_API_KEY,

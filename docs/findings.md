@@ -58,7 +58,7 @@ that visibly holds funds. Addresses must come from the token-list endpoint
   and the HMAC signature must cover the exact body bytes. The GET form returns
   a 200 with an error payload rather than a 405.
 - **`approveTransaction=true` without `approveAmount`** on the swap endpoint
-  returns `50026 System error` — a generic code for what is actually a
+  returns `50026 System error`, a generic code for what is actually a
   missing-parameter validation.
 - **The aggregator does not serve X Layer testnet** (chain 1952 → `50026`).
   Autonomous flows can only be integration-tested on mainnet or against a

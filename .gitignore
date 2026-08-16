@@ -39,15 +39,6 @@ Thumbs.db
 .idea/
 *.swp
 
-# local tooling — see RULES.md #1. Keep tooling config out of the repo
-# entirely rather than committing it and relying on its contents being clean.
-.claude/
-CLAUDE.md
-CLAUDE.local.md
-.cursor/
-.aider*
-.github/copilot-instructions.md
-
 # logs
 *.log
 npm-debug.log*

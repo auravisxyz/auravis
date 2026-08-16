@@ -20,7 +20,8 @@
     "routes": "tsx src/try-routes.ts",
     "owner:swap": "tsx src/owner-swap.ts",
     "fund:router": "tsx src/fund-router.ts",
-    "set:rate": "tsx src/set-rate.ts"
+    "set:rate": "tsx src/set-rate.ts",
+    "setup:demo": "tsx src/setup-demo.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

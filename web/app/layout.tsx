@@ -16,6 +16,7 @@ export const viewport: Viewport = {
 import TopNav from "./TopNav";
 import Footer from "./Footer";
 import BottomNav from "./BottomNav";
+import WalletPicker from "./WalletPicker";
 import { WalletProvider } from "./wallet";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="flex flex-1 flex-col">{children}</div>
           <Footer />
           <BottomNav />
+          <WalletPicker />
         </WalletProvider>
       </body>
     </html>
