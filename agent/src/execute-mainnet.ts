@@ -8,8 +8,12 @@ import { buildRoute } from "./execution.js";
 /**
  * The first live execute(). Dry-run by default:
  *
- *   npm run execute:mainnet              # quote + checks, sends nothing
- *   npm run execute:mainnet -- --confirm # actually swaps
+ *   npm run execute:mainnet                    # quote + checks, sends nothing
+ *   npm run execute:mainnet -- --amount 4      # spend 4 USDT instead of 10
+ *   npm run execute:mainnet -- --confirm       # actually swaps
+ *   npm run execute:mainnet -- --confirm --force
+ *       broadcasts even when it will revert, so a refusal lands on-chain
+ *       where it can be linked to. Costs gas and returns nothing.
  *
  * This is the only script that moves money. Every check the contract performs
  * is repeated here first, so a failure shows up as a readable message instead
@@ -17,8 +21,26 @@ import { buildRoute } from "./execution.js";
  */
 
 const CONFIRM = process.argv.includes("--confirm");
+/**
+ * Broadcast even when the call is going to revert. Used to put a refusal
+ * on-chain where anyone can read it, instead of only in our terminal.
+ */
+const FORCE = process.argv.includes("--force");
 const MANDATE_ID = 0n;
-const SPEND = 10_000_000n; // 10 USDT
+
+/** --amount 4 → 4 USDT. Defaults to 10. */
+function spendFromArgv(): bigint {
+  const i = process.argv.indexOf("--amount");
+  if (i === -1 || !process.argv[i + 1]) return 10_000_000n;
+  const parsed = Number(process.argv[i + 1]);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    console.error(`--amount must be a positive number, got "${process.argv[i + 1]}"`);
+    process.exit(1);
+  }
+  return BigInt(Math.round(parsed * 1e6));
+}
+
+const SPEND = spendFromArgv();
 
 async function main() {
   console.log(CONFIRM ? "LIVE EXECUTE\n" : "EXECUTE — DRY RUN (nothing will be sent)\n");
@@ -86,6 +108,35 @@ async function main() {
   console.log(`\nfloors: owner ${formatUnits(ownerFloor, 6)}, route ${route.minOut === 0n ? "none" : formatUnits(route.minOut, 6)}`);
   console.log(`  binding: ${route.minOut > ownerFloor ? "route" : "owner"}`);
 
+  // 5. Can the router actually pay? DemoRouter fills from its own reserve, so
+  //    a reserve smaller than the floor reverts at transfer time — a failure
+  //    that looks like a bug but is really just an empty till. The contract
+  //    cannot check this for us, so we check it here.
+  const reserve = (await publicClient.readContract({
+    address: mandate.buyToken as Address,
+    abi: [
+      {
+        type: "function",
+        name: "balanceOf",
+        stateMutability: "view",
+        inputs: [{ name: "a", type: "address" }],
+        outputs: [{ type: "uint256" }],
+      },
+    ] as const,
+    functionName: "balanceOf",
+    args: [route.router],
+  })) as bigint;
+  const needed = route.minOut > ownerFloor ? route.minOut : ownerFloor;
+  console.log(`\nrouter reserve: ${formatUnits(reserve, 6)} (needs at least ${formatUnits(needed, 6)})`);
+  if (reserve < needed) {
+    console.error(
+      `\nThe router holds ${formatUnits(reserve, 6)} but must pay out at least ` +
+        `${formatUnits(needed, 6)}. Either fund it further, or lower the trade:\n` +
+        `  npm run execute:mainnet -- --amount <smaller>`,
+    );
+    process.exit(1);
+  }
+
   const gas = await publicClient.getBalance({ address: agentAccount.address });
   console.log(`\nagent OKB: ${formatUnits(gas, 18)}`);
   if (gas === 0n) {
@@ -99,7 +150,7 @@ async function main() {
   }
 
   // 5. Go.
-  console.log("\nSending execute()…");
+  console.log(FORCE ? "\nSending execute() unsimulated…" : "\nSending execute()…");
   const hash = await executeMandate({
     id: MANDATE_ID,
     router: route.router,
@@ -107,12 +158,21 @@ async function main() {
     declaredIn: SPEND,
     minOut: route.minOut,
     reason: `Swapped ${formatUnits(SPEND, 6)} USDT for USDC ${route.description}.`,
+    force: FORCE,
   });
   console.log(`  tx ${hash}`);
 
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
   console.log(`  status: ${receipt.status}  block: ${receipt.blockNumber}`);
   console.log(`  ${activeChain.blockExplorers?.default.url}/tx/${hash}`);
+
+  if (receipt.status === "reverted") {
+    console.log(
+      `\nRefused on-chain, and now on the public record. The mandate held ` +
+        `against an agent that had every permission except a good enough price.`,
+    );
+    process.exit(0);
+  }
 
   // Decode our own event rather than trusting the quote's estimate.
   for (const log of receipt.logs) {

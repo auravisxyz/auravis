@@ -74,6 +74,13 @@ export interface ExecuteParams {
   declaredIn: bigint;
   minOut: bigint;
   reason: string;
+  /**
+   * Skip the pre-flight simulation and broadcast regardless. Only for
+   * demonstrating a refusal on-chain: normally a revert should be caught
+   * locally and cost nothing, but a refusal nobody can point at in an
+   * explorer is not evidence.
+   */
+  force?: boolean;
 }
 
 /**
@@ -89,6 +96,28 @@ export interface ExecuteParams {
  */
 export async function executeMandate(params: ExecuteParams): Promise<Hex> {
   const dataSuffix = builderCodeSuffix();
+
+  const args = [
+    params.id,
+    params.router,
+    params.swapData,
+    params.declaredIn,
+    params.minOut,
+    params.reason,
+  ] as const;
+
+  if (params.force) {
+    // A fixed gas limit is required: estimateGas reverts for the same reason
+    // the call does, and would block the broadcast.
+    return walletClient.writeContract({
+      address: mandateAddress,
+      abi: auravisMandateAbi,
+      functionName: "execute",
+      args,
+      gas: 500_000n,
+      ...(dataSuffix ? { dataSuffix } : {}),
+    });
+  }
 
   const { request } = await publicClient.simulateContract({
     address: mandateAddress,

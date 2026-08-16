@@ -40,6 +40,11 @@ const schema = z.object({
   // model is that the owner key can overrule the agent key.
   OWNER_PRIVATE_KEY: z.string().optional(),
 
+  // -- deployer identity -------------------------------------------------
+  // Owns DemoRouter, so it is the only key that can move the demo's rate
+  // lever (`npm run set:rate`). Nothing else reads it.
+  DEPLOYER_PRIVATE_KEY: z.string().optional(),
+
   // -- OKX -----------------------------------------------------------------
   OKX_API_KEY: z.string().optional(),
   OKX_API_SECRET: z.string().optional(),
@@ -89,6 +94,7 @@ export const config = {
   },
 
   ownerPrivateKey: env.OWNER_PRIVATE_KEY as `0x${string}` | undefined,
+  deployerPrivateKey: env.DEPLOYER_PRIVATE_KEY as `0x${string}` | undefined,
 
   okx: {
     apiKey: env.OKX_API_KEY,

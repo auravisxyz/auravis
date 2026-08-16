@@ -165,13 +165,19 @@ async function main() {
   // goes stale during the ~15s approval confirmation window.
   console.log("[2/3] swapping (fresh quote)…");
   const fresh = await getSwapQuote();
+  // A manual gas limit skips viem's pre-flight estimateGas call, which
+  // itself reverts (that's the bug) and would otherwise stop the tx from
+  // ever being broadcast. This forces it onto the chain for a real,
+  // minable revert receipt — the evidence the OKX ticket needs.
   const swapHash = await wallet.sendTransaction({
     to: fresh.tx.to as Address,
     data: fresh.tx.data as Hex,
     value: BigInt(fresh.tx.value ?? "0"),
+    gas: 500_000n,
     chain: activeChain,
     account: owner,
   });
+  console.log(`      broadcast: ${swapHash}`);
   const swapReceipt = await publicClient.waitForTransactionReceipt({ hash: swapHash });
   if (swapReceipt.status !== "success") {
     console.error(`swap reverted: ${swapHash}`);

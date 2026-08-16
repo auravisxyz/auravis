@@ -71,8 +71,25 @@ docs/        Research and technical notes
 
 ## Proof transactions
 
-Real on-chain actions taken by the agent, unattended, on X Layer testnet.
-Same agent, same key, same instruction in both rows below — the only thing that
+Real on-chain actions taken by the agent, unattended, with real money.
+
+### Mainnet
+
+Same agent, same key, same mandate. The only thing that changed between these
+two rows was the price the router offered.
+
+| What | Tx |
+|---|---|
+| Agent executed a swap on its own, inside its mandate. Spent 4 USDT, received 3.998 USDC, 16 left of the cap | [`0xbf431b33…`](https://www.okx.com/web3/explorer/xlayer/tx/0xbf431b339a4ff84c67851db2d2aac5744d8491acd49c3529ce8eaa6d6474300b) |
+| The router's rate was then dropped below the owner's price floor, and the same agent was **refused by the contract** — reverted, `ReceivedLessThanMinimum(0.99, 0.90)` | [`0x255068e7…`](https://www.okx.com/web3/explorer/xlayer/tx/0x255068e702288bde4b5677111e75c2e5ef51c567756292636e3a7a89602ad456) |
+
+The agent held a valid signature, was inside its cap, and called an allowlisted
+router. It still could not move the money, because the price was wrong.
+Permission was never what stood in its way.
+
+### Testnet
+
+Same agent, same key, same instruction in both rows below. The only thing that
 changed was the price the router offered.
 
 | What | Tx |
