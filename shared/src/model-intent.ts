@@ -137,6 +137,7 @@ export class ModelIntentExtractor implements IntentExtractor {
       spendToken: null,
       buyToken: null,
       amount: num(parsed.amount),
+      quantity: num(parsed.quantity),
       currency: typeof parsed.currency === "string" ? parsed.currency.slice(0, 8) : "USD",
       direction,
       targetPrice: num(parsed.targetPrice),

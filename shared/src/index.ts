@@ -117,8 +117,24 @@ export interface IntentDraft {
   summary: string;
   spendToken: Address | null;
   buyToken: Address | null;
-  /** Human amount, e.g. 200 for "$200 worth". Base units come later. */
+  /**
+   * How much money to spend, e.g. 200 for "$200 worth". Base units come later.
+   *
+   * Distinct from `quantity` and `targetPrice`, and conflating them is the
+   * single easiest way to get someone's money wrong. Three different numbers
+   * live in these sentences:
+   *
+   *   "buy $83 worth if it drops 8%"   amount 83
+   *   "buy 1 if it drops to $82"       quantity 1, targetPrice 82
+   *   "buy at $85"                     targetPrice 85, nothing to spend stated
+   *
+   * A parser that sees "83" and files it under whichever field it checks first
+   * will happily spend $82 to watch for a price, or watch for $83 while
+   * meaning to spend it.
+   */
   amount: number | null;
+  /** How many units, e.g. 1 for "buy 1". Not a sum of money. */
+  quantity: number | null;
   currency: string;
   direction: TriggerDirection;
   /** Absolute target price, once resolved. */

@@ -61,6 +61,76 @@ async function main() {
   check("low confidence", d.confidence < 0.3, true);
   check("flags assumptions", d.assumptions.length > 0, true);
 
+  /**
+   * Three numbers, three meanings.
+   *
+   * The popup told someone who had typed "buy 83$ price drops 8%" that no
+   * spend amount was found: the money pattern only accepted a leading "$", so
+   * a trailing one parsed as nothing. Everything below is a phrasing that
+   * broke, or nearly broke, once that was fixed.
+   */
+  console.log("\n-- money, counts and thresholds --");
+
+  console.log('"buy 83$ price drops 8%"');
+  d = await extractor.extract(capture, "buy 83$ price drops 8%");
+  check("amount", d.amount, 83);
+  // Without a whole-number guard this reported a quantity of 8, from the "8"
+  // inside "83".
+  check("quantity", d.quantity, null);
+  check("targetPercent", d.targetPercent, 8);
+
+  console.log('"buy 1 if prices drops to 82$"');
+  d = await extractor.extract(capture, "buy 1 if prices drops to 82$");
+  check("quantity", d.quantity, 1);
+  check("amount", d.amount, null);
+  check("targetPrice", d.targetPrice, 82);
+
+  console.log('"buy at 85$ if price drops 8%"');
+  d = await extractor.extract(capture, "buy at 85$ if price drops 8%");
+  check("targetPrice", d.targetPrice, 85);
+  check("targetPercent", d.targetPercent, 8);
+  check("amount", d.amount, null);
+
+  // "under 40" with no currency marker. Previously invisible.
+  console.log('"buy 2 when it goes under 40"');
+  d = await extractor.extract(capture, "buy 2 when it goes under 40");
+  check("quantity", d.quantity, 2);
+  check("targetPrice", d.targetPrice, 40);
+
+  console.log('"spend 50 dollars if it falls below 30"');
+  d = await extractor.extract(capture, "spend 50 dollars if it falls below 30");
+  check("amount", d.amount, 50);
+  check("targetPrice", d.targetPrice, 30);
+
+  console.log('"buy two if it drops 8%"');
+  d = await extractor.extract(capture, "buy two if it drops 8%");
+  check("quantity", d.quantity, 2);
+
+  console.log('"buy $1,250.50 worth if it drops 7.5%"');
+  d = await extractor.extract(capture, "buy $1,250.50 worth if it drops 7.5%");
+  check("amount", d.amount, 1250.5);
+  check("targetPercent", d.targetPercent, 7.5);
+
+  console.log('"buy 1 if it drops to 0.75"');
+  d = await extractor.extract(capture, "buy 1 if it drops to 0.75");
+  check("targetPrice", d.targetPrice, 0.75);
+  check("quantity", d.quantity, 1);
+
+  // "under" here is English, not a threshold. Must not invent a price.
+  console.log('"buy 1 under any circumstances"');
+  d = await extractor.extract(capture, "buy 1 under any circumstances");
+  check("targetPrice", d.targetPrice, null);
+  check("quantity", d.quantity, 1);
+
+  // A quantity alone is a complete instruction; don't claim nothing was given.
+  console.log('"buy 1 if it drops 8%" states what to buy');
+  d = await extractor.extract(capture, "buy 1 if it drops 8%");
+  check(
+    "no missing-amount complaint",
+    d.assumptions.some((a) => a.includes("No amount or quantity")),
+    false,
+  );
+
   console.log(failures === 0 ? "\nAll passed." : `\n${failures} failed.`);
   process.exit(failures === 0 ? 0 : 1);
 }

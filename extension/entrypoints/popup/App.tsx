@@ -583,7 +583,10 @@ function ReviewCard({
   onMandate: () => void;
 }) {
   const tradeable = isTradeablePage(capture.url);
-  const wantsToBuy = draft.amount !== null;
+  // A count is a complete instruction too. "buy 1 if it drops 8%" says exactly
+  // what to do, and treating only a dollar figure as intent-to-buy meant those
+  // people were told nothing was found.
+  const wantsToBuy = draft.amount !== null || draft.quantity !== null;
   const unsure = draft.confidence < CONFIDENCE_FLOOR;
 
   const hasTarget = draft.targetPrice !== null || draft.targetPercent !== null;
@@ -602,23 +605,30 @@ function ReviewCard({
   const watchBlocked = !hasTarget || percentWithoutPrice || unsure;
   const mandateBlocked = watchBlocked || !wantsToBuy;
 
-  // The hero: the one number this decision is about.
+  // The hero: the one number this decision is about. Money first, then a
+  // count, then whichever trigger we have — in the order a person would care.
   const hero =
     draft.amount !== null
       ? `$${draft.amount}`
-      : draft.targetPrice !== null
-        ? `${symbol}${draft.targetPrice}`
-        : draft.targetPercent !== null
-          ? `${draft.targetPercent}%`
-          : "—";
+      : draft.quantity !== null
+        ? `${draft.quantity}`
+        : draft.targetPrice !== null
+          ? `${symbol}${draft.targetPrice}`
+          : draft.targetPercent !== null
+            ? `${draft.targetPercent}%`
+            : "—";
   const heroCaption =
     draft.amount !== null
-      ? wantsToBuy && tradeable
+      ? tradeable
         ? "to spend, capped on-chain"
         : "to spend, once you confirm"
-      : draft.direction === "below"
-        ? "drop to watch for"
-        : "rise to watch for";
+      : draft.quantity !== null
+        ? draft.quantity === 1
+          ? "to buy, once you confirm"
+          : "to buy, once you confirm"
+        : draft.direction === "below"
+          ? "drop to watch for"
+          : "rise to watch for";
 
   let targetLine: string | null = null;
   if (draft.targetPercent !== null && price) {
