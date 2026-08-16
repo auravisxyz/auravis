@@ -51,3 +51,6 @@ CLAUDE.local.md
 # logs
 *.log
 npm-debug.log*
+
+# TypeScript incremental build cache
+*.tsbuildinfo
