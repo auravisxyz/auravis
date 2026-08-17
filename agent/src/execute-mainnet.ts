@@ -26,7 +26,20 @@ const CONFIRM = process.argv.includes("--confirm");
  * on-chain where anyone can read it, instead of only in our terminal.
  */
 const FORCE = process.argv.includes("--force");
-const MANDATE_ID = 0n;
+
+/** `--mandate 1` to act on a mandate other than the first. */
+function mandateFromArgv(): bigint {
+  const i = process.argv.indexOf("--mandate");
+  const raw = i === -1 ? undefined : process.argv[i + 1];
+  if (!raw) return 0n;
+  if (!/^\d+$/.test(raw)) {
+    console.error(`--mandate must be a whole number, got "${raw}"`);
+    process.exit(1);
+  }
+  return BigInt(raw);
+}
+
+const MANDATE_ID = mandateFromArgv();
 
 /** --amount 4 → 4 USDT. Defaults to 10. */
 function spendFromArgv(): bigint {

@@ -21,6 +21,21 @@ Then it watches. When your condition is met it either prepares the swap and asks
 you to confirm, or executes it itself, depending on the mode you chose. Either
 way it writes down what it did, and why.
 
+### Waiting is the feature
+
+Price is only one reason to wait. Auravis also watches whether a thing can be
+bought at all, and treats coming back in stock as its own event.
+
+A sold-out item never fires a price alert, because sending someone to a page
+they cannot buy from is worse than staying quiet. It remembers the item was
+gone, keeps checking, and tells you the moment it returns. That is the concert
+ticket at 10am, the sneaker drop, the restock you would otherwise have to sit
+and refresh for.
+
+Checking runs in your own browser, on your own session, so it sees the page you
+would see: your region, your currency, your account pricing. A server watching
+the same URL from a datacentre sees a different page, or a bot wall.
+
 ### Reading the page, not scraping it
 
 A price-shaped string exists on plenty of pages where it means nothing: an
@@ -96,19 +111,15 @@ go completely haywire, and it still cannot move a unit beyond what you signed fo
 Not built. Written down because the architecture points at it, and because it
 is clearer to say what is missing than to imply it already works.
 
-The thing people actually want an agent for is the queue. Concert tickets at
-10am, a sneaker drop, a restock, a flight that dips for six hours overnight.
-The pattern is identical to a price trigger: watch something, act at a moment
-you cannot personally sit and wait for, and never spend more than you agreed.
-A mandate is general-purpose bounded authority, so nothing about the contract
-needs to change to express "spend up to $400 the instant these go on sale".
+The watching half of the queue problem is done. Auravis already sits on a
+ticket page or a drop and tells you the instant it opens, from your own
+browser, and a mandate already expresses "spend up to $400 the moment these go
+on sale" without a single contract change.
 
-Half of it already works. Watching runs in your own browser, with your session,
-your region and your account pricing, which is exactly what a ticket page needs
-and exactly what a server-side scraper cannot see. What is missing is the
-payment side: Auravis can only settle on-chain, so it can watch any page in the
-world but can only *buy* where an on-chain route exists. For an ordinary
-merchant it can currently tell you the moment, not take the moment for you.
+What is missing is the payment side. Auravis settles on-chain, so it can watch
+any page in the world but can only *buy* where an on-chain route exists. For an
+ordinary merchant it can take you to the moment; it cannot yet take the moment
+for you.
 
 Closing that gap is a payments integration, not a redesign. The cap, the
 window, the allowlist and the price floor are indifferent to what is being

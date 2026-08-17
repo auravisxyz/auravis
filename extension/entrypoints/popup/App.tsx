@@ -784,11 +784,22 @@ function ReviewCard({
         {(targetLine ||
           draft.assumptions.length > 0 ||
           (wantsToBuy && !tradeable) ||
+          capture.availability === "out-of-stock" ||
           (basis === "delivered" && delivered === null && draft.targetPrice !== null)) && (
           <>
             <div className="hairline" />
             <div className="flex flex-col gap-1.5">
               {targetLine && <p className="note note-accent">{targetLine}</p>}
+
+              {/* The watcher already holds price alerts on a sold-out item and
+                  fires on the restock instead. It was doing this silently,
+                  which is the same as not doing it as far as anyone knows. */}
+              {capture.availability === "out-of-stock" && (
+                <p className="note note-accent">
+                  This is sold out. I will tell you the moment it is back, not just
+                  when the price moves
+                </p>
+              )}
 
               {basis === "delivered" && delivered === null && draft.targetPrice !== null && (
                 <p className="note note-warn">

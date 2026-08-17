@@ -34,8 +34,14 @@ export default async function Dashboard() {
   const explorer = activeChain.blockExplorers?.default.url;
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-6 sm:px-6">
-      <Gate>
+    <main className="flex w-full flex-1 flex-col">
+      <Gate
+        stats={{
+          remaining: `$${amount(totalRemaining)}`,
+          actions: executions.length,
+          refusals: executions.filter((e) => e.status === "reverted").length,
+        }}
+      >
       <div className="flex flex-col gap-8">
       {/* ---- The three numbers that matter -------------------------------- */}
       <section className="rise rise-2 grid grid-cols-1 gap-3 sm:grid-cols-3">

@@ -35,6 +35,22 @@
   --color-warn: oklch(0.86 0.14 85);
   --color-danger: oklch(0.68 0.19 25);
 
+  /* Light bands, for the landing page only.
+     The app is dark because it is a tool you sit in. The landing page is a
+     thing you read once, and an unbroken wall of dark reads as one long
+     gradient with no shape. Alternating bands give it a pulse and put the
+     proof, which is the strongest thing we have, on the highest contrast
+     surface on the site. Not used anywhere inside the dashboard. */
+  --color-paper: oklch(0.97 0.008 260);
+  --color-paper-pure: oklch(1 0 0);
+  --color-paper-line: oklch(0.89 0.012 262);
+  --color-paper-ink: oklch(0.22 0.02 265);
+  --color-paper-ink-muted: oklch(0.44 0.025 265);
+  --color-paper-ink-faint: oklch(0.56 0.03 265);
+  --color-paper-accent: oklch(0.52 0.2 258);
+  --color-paper-good: oklch(0.55 0.15 150);
+  --color-paper-bad: oklch(0.55 0.2 27);
+
   --radius-card: 1rem;
   --radius-control: 0.625rem;
 }
@@ -353,5 +369,155 @@ body::after {
 @media (prefers-reduced-motion: reduce) {
   .aura-orb {
     animation: none;
+  }
+}
+
+/* --- Landing page ----------------------------------------------------------
+   The hero types an instruction and shows what it understood, on a loop. It
+   is the product in five seconds, playing before anyone clicks anything.
+   Everything here honours prefers-reduced-motion at the bottom of the file. */
+
+@keyframes type-in {
+  0%, 8% { width: 0; }
+  45%, 58% { width: 21ch; }
+  95%, 100% { width: 0; }
+}
+
+@keyframes caret-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes parse-in {
+  0%, 50% { opacity: 0; transform: translateY(0.25rem); }
+  62%, 92% { opacity: 1; transform: none; }
+  100% { opacity: 0; }
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.35); }
+}
+
+.typewriter {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  vertical-align: bottom;
+  animation: type-in 7s steps(21) infinite;
+}
+
+.caret {
+  display: inline-block;
+  width: 1px;
+  height: 0.95rem;
+  vertical-align: -0.125rem;
+  background-color: var(--color-accent-bright);
+  animation: caret-blink 0.9s steps(1) infinite;
+}
+
+.parse-reveal {
+  animation: parse-in 7s ease infinite;
+}
+
+.live-dot {
+  animation: live-pulse 2.4s ease-in-out infinite;
+}
+
+/* Light bands. Scoped so nothing inside the dashboard can pick these up. */
+.band-paper {
+  background-color: var(--color-paper);
+  color: var(--color-paper-ink);
+}
+
+.band-paper-pure {
+  background-color: var(--color-paper-pure);
+  color: var(--color-paper-ink);
+}
+
+.paper-card {
+  background-color: var(--color-paper-pure);
+  border: 1px solid var(--color-paper-line);
+  border-radius: var(--radius-card);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typewriter { animation: none; width: 21ch; }
+  .caret { animation: none; }
+  .parse-reveal { animation: none; opacity: 1; }
+  .live-dot { animation: none; opacity: 1; }
+}
+
+/* --- Landing typography and cards ------------------------------------------
+   One scale, used everywhere on this page. The previous pass mixed sizes ad
+   hoc, which reads as noise rather than hierarchy: an eyebrow, a heading and
+   a body line were all within a step of each other, so nothing led. */
+
+.eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.display {
+  font-size: clamp(2rem, 5.2vw, 3.25rem);
+  font-weight: 600;
+  line-height: 1.06;
+  letter-spacing: -0.028em;
+}
+
+.section-title {
+  font-size: clamp(1.4rem, 3vw, 1.95rem);
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+}
+
+.lede {
+  font-size: 1rem;
+  line-height: 1.65;
+  max-width: 46ch;
+}
+
+.card-title {
+  font-size: 1.0625rem;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: -0.008em;
+}
+
+.meta {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+
+/* Paper cards get a real resting state and a reason to hover. A flat bordered
+   rectangle is not a card, it is a box. */
+.paper-card {
+  background-color: var(--color-paper-pure);
+  border: 1px solid var(--color-paper-line);
+  border-radius: var(--radius-card);
+  box-shadow: 0 1px 2px oklch(0.2 0.02 265 / 0.04);
+  transition: box-shadow 200ms ease, transform 200ms ease, border-color 200ms ease;
+}
+
+.paper-card-link:hover {
+  box-shadow: 0 6px 20px oklch(0.2 0.02 265 / 0.09);
+  border-color: oklch(0.82 0.02 262);
+  transform: translateY(-2px);
+}
+
+/* The proof pair. Accent lives on the left edge, so the corner radius has to
+   go with it, otherwise the stripe floats off a rounded corner. */
+.proof-card {
+  border-radius: 0 var(--radius-card) var(--radius-card) 0;
+  border-left-width: 3px;
+  border-left-style: solid;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paper-card-link:hover {
+    transform: none;
   }
 }
