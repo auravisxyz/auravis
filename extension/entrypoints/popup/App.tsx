@@ -402,8 +402,9 @@ function Header() {
         type="button"
         onClick={() => void browser.tabs.create({ url: APP_URL })}
         title="Open your Auravis dashboard"
-        className="group flex items-baseline gap-1.5 text-sm font-semibold tracking-tight text-ink"
+        className="group flex items-center gap-1.5 text-sm font-semibold tracking-tight text-ink"
       >
+        <img src="/icon/32.png" alt="" className="size-4 rounded" />
         Auravis
         <span className="text-xs text-ink-faint transition-colors group-hover:text-accent-bright">
           ↗ dashboard

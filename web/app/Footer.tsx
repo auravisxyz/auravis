@@ -14,7 +14,8 @@ export default function Footer() {
     <footer className="hidden border-t border-edge sm:block">
       <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
         <div className="flex items-center gap-2">
-          <span className="aura-mark" aria-hidden />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="" className="size-4 rounded" />
           <span className="text-xs text-ink-faint">
             {network === "testnet" ? "X Layer testnet · test tokens only" : "X Layer mainnet"}
           </span>

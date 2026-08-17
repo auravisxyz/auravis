@@ -17,7 +17,8 @@ export default function TopNav() {
     <nav className="sticky top-0 z-10 border-b border-edge bg-canvas-deep/70 backdrop-blur-xl">
       <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
         <Link href="/" className="flex items-center gap-2">
-          <span className="aura-mark" aria-hidden />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="" className="size-5 rounded-md" />
           <span className="text-sm font-semibold tracking-tight text-ink">Auravis</span>
         </Link>
 

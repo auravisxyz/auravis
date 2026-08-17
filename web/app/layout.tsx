@@ -2,9 +2,27 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.auravis.xyz"),
   title: "Auravis",
   description:
     "Point at anything, say what you want, and let an agent act within a limit it cannot exceed.",
+  // icon.png, apple-icon.png, opengraph-image.png and twitter-image.png sit in
+  // app/ and are wired up by file convention. Declared here so the card has a
+  // title and description of its own when a link is pasted somewhere.
+  openGraph: {
+    title: "Auravis",
+    description:
+      "An agent that shops for you. A limit it can never break, enforced by a smart contract on X Layer.",
+    url: "https://www.auravis.xyz",
+    siteName: "Auravis",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Auravis",
+    description:
+      "An agent that shops for you. A limit it can never break, enforced by a smart contract on X Layer.",
+  },
 };
 
 export const viewport: Viewport = {
