@@ -91,6 +91,29 @@ go completely haywire, and it still cannot move a unit beyond what you signed fo
 | **Catch** *(default)* | Auravis prepares the swap and notifies you. You confirm in one tap. |
 | **Auto** | Auravis executes autonomously under the mandate, within the on-chain cap. |
 
+## Where this goes
+
+Not built. Written down because the architecture points at it, and because it
+is clearer to say what is missing than to imply it already works.
+
+The thing people actually want an agent for is the queue. Concert tickets at
+10am, a sneaker drop, a restock, a flight that dips for six hours overnight.
+The pattern is identical to a price trigger: watch something, act at a moment
+you cannot personally sit and wait for, and never spend more than you agreed.
+A mandate is general-purpose bounded authority, so nothing about the contract
+needs to change to express "spend up to $400 the instant these go on sale".
+
+Half of it already works. Watching runs in your own browser, with your session,
+your region and your account pricing, which is exactly what a ticket page needs
+and exactly what a server-side scraper cannot see. What is missing is the
+payment side: Auravis can only settle on-chain, so it can watch any page in the
+world but can only *buy* where an on-chain route exists. For an ordinary
+merchant it can currently tell you the moment, not take the moment for you.
+
+Closing that gap is a payments integration, not a redesign. The cap, the
+window, the allowlist and the price floor are indifferent to what is being
+bought.
+
 ## Repo layout
 
 ```
