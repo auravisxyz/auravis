@@ -7,6 +7,8 @@ import {
   listWatches,
   updateWatch,
   targetValue,
+  rememberOutcome,
+  takeOutcome,
   DEFAULT_TTL_DAYS,
   type Watch,
 } from "../../lib/watchlist.js";
@@ -109,9 +111,65 @@ export default function App() {
   const [order, setOrder] = useState<{ mandateId: string | null; txHash: string } | null>(null);
 
   useEffect(() => {
-    void runCapture();
+    void resume();
     void refreshWatches();
   }, []);
+
+  /**
+   * Pick up where we left off, if we were interrupted.
+   *
+   * Chrome closes the popup when anything else takes focus, and both of our
+   * flows hand focus away mid-action: watching triggers a site permission
+   * prompt, ordering opens the wallet in a tab. Reopening used to start from a
+   * fresh capture, so the last thing a person saw was the moment before it
+   * worked. Now the outcome is read first, shown once, and cleared.
+   */
+  async function resume() {
+    const outcome = await takeOutcome();
+
+    if (outcome?.kind === "order") {
+      setOrder({ mandateId: outcome.mandateId, txHash: outcome.txHash });
+      setStage("order-done");
+      return;
+    }
+
+    if (outcome?.kind === "watch") {
+      const found = (await listWatches()).find((w) => w.id === outcome.watchId);
+      if (found && found.status === "active") {
+        setSavedWatch(found);
+        setStage("watch-done");
+        return;
+      }
+    }
+
+    // Handed to the wallet but unresolved when we were closed. The dashboard
+    // knows the answer, so ask it rather than making the person start again.
+    if (outcome?.kind === "order-pending") {
+      try {
+        const res = await fetch(`${APP_URL}/api/drafts/${outcome.draftId}`);
+        if (res.ok) {
+          const body = (await res.json()) as {
+            mandateId?: string | null;
+            txHash?: string | null;
+          };
+          if (body.txHash) {
+            setOrder({ mandateId: body.mandateId ?? null, txHash: body.txHash });
+            setStage("order-done");
+            return;
+          }
+          // Still unsigned. Put it back, wait again, and keep the tab honest.
+          await rememberOutcome(outcome);
+          setStage("signing");
+          void waitForSignature(outcome.draftId);
+          return;
+        }
+      } catch {
+        // Dashboard unreachable. Fall through to a normal capture.
+      }
+    }
+
+    void runCapture();
+  }
 
   /**
    * The capture everything else works from.
@@ -270,15 +328,15 @@ export default function App() {
       return;
     }
 
-    // Must be the first await in the click handler — Chrome ties permission
-    // prompts to the user gesture.
-    const granted = await browser.permissions.request({ origins: [origin] });
-    if (!granted) {
-      setActionError(
-        "Auravis needs permission for this site to re-check the price. Nothing else is read.",
-      );
-      return;
-    }
+    // Started, not awaited. Chrome ties the prompt to the user gesture, so this
+    // has to be the first call in the handler. But showing the prompt takes
+    // focus, and losing focus destroys the popup, which means anything after an
+    // `await` here may simply never run. Watches were being lost that way: the
+    // person clicked allow and nothing had been saved.
+    //
+    // So the request goes out, the watch is written immediately, and the answer
+    // is dealt with afterwards if we are still alive to deal with it.
+    const permission = browser.permissions.request({ origins: [origin] });
 
     setBusy(true);
     try {
@@ -308,9 +366,29 @@ export default function App() {
       };
 
       await addWatch(watch);
+      await rememberOutcome({
+        kind: "watch",
+        at: new Date().toISOString(),
+        watchId: watch.id,
+      });
+
       setSavedWatch(watch);
       await refreshWatches();
       setStage("watch-done");
+
+      // If we are still here, the prompt has been answered. A refusal means the
+      // watch cannot be re-checked, so it should not sit in the list pretending
+      // otherwise.
+      const granted = await permission;
+      if (!granted) {
+        await updateWatch(watch.id, { status: "cancelled" });
+        await refreshWatches();
+        setSavedWatch(null);
+        setStage("review");
+        setActionError(
+          "Auravis needs permission for this site to re-check the price. Nothing else is read.",
+        );
+      }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Could not save the watch.");
     } finally {
@@ -339,6 +417,15 @@ export default function App() {
       // provider into web pages, and a popup cannot reach it. But closing the
       // popup at the same moment left people with no idea whether anything had
       // happened. So we stay open, wait, and say so when it lands.
+      // Written before the tab opens: creating it takes focus, and losing focus
+      // destroys this popup. Reopening then finds the pending draft and asks
+      // the dashboard how it went.
+      await rememberOutcome({
+        kind: "order-pending",
+        at: new Date().toISOString(),
+        draftId: id,
+      });
+
       await browser.tabs.create({ url: `${APP_URL}/confirm/${id}` });
       setBusy(false);
       setStage("signing");
@@ -376,6 +463,12 @@ export default function App() {
           txHash?: string | null;
         };
         if (body.txHash) {
+          await rememberOutcome({
+            kind: "order",
+            at: new Date().toISOString(),
+            mandateId: body.mandateId ?? null,
+            txHash: body.txHash,
+          });
           setOrder({ mandateId: body.mandateId ?? null, txHash: body.txHash });
           setStage("order-done");
           return;

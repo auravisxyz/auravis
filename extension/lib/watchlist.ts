@@ -199,3 +199,40 @@ export async function recheckPrice(url: string): Promise<RecheckResult | null> {
 
   return null;
 }
+
+/* --- Unfinished business ---------------------------------------------------
+   Chrome closes the popup whenever something else takes focus: a permission
+   prompt, a wallet tab, a click on the page behind. That happens in the middle
+   of both of our flows, so a success screen rendered in memory is a success
+   screen nobody sees. Reopening then starts from a fresh capture, and the
+   person is left unsure whether anything worked.
+
+   So the outcome is written down. The popup reads it on open, shows it once,
+   and clears it. */
+
+const PENDING_KEY = "auravis.lastOutcome";
+
+/** How long an unseen outcome is still worth showing. */
+const OUTCOME_TTL_MS = 10 * 60_000;
+
+export type Outcome =
+  | { kind: "watch"; at: string; watchId: string }
+  | { kind: "order"; at: string; mandateId: string | null; txHash: string }
+  /** Handed to the wallet, not yet signed. Resolved by asking the dashboard. */
+  | { kind: "order-pending"; at: string; draftId: string };
+
+export async function rememberOutcome(outcome: Outcome): Promise<void> {
+  await browser.storage.local.set({ [PENDING_KEY]: outcome });
+}
+
+/** Returns a recent unseen outcome, and forgets it so it shows exactly once. */
+export async function takeOutcome(): Promise<Outcome | null> {
+  const stored = await browser.storage.local.get(PENDING_KEY);
+  const outcome = stored[PENDING_KEY] as Outcome | undefined;
+  if (!outcome) return null;
+
+  await browser.storage.local.remove(PENDING_KEY);
+
+  if (Date.now() - new Date(outcome.at).getTime() > OUTCOME_TTL_MS) return null;
+  return outcome;
+}
