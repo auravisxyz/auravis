@@ -79,6 +79,9 @@ type Stage =
   | "review"
   | "saving"
   | "watch-done"
+  /** Draft is on the dashboard, the wallet tab is open, we are waiting on a signature. */
+  | "signing"
+  | "order-done"
   | "error";
 
 const extractor = new PatternIntentExtractor();
@@ -102,6 +105,8 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [watches, setWatches] = useState<Watch[]>([]);
   const [savedWatch, setSavedWatch] = useState<Watch | null>(null);
+  /** Set once a mandate has actually been signed on-chain. */
+  const [order, setOrder] = useState<{ mandateId: string | null; txHash: string } | null>(null);
 
   useEffect(() => {
     void runCapture();
@@ -329,8 +334,15 @@ export default function App() {
         throw new Error(body?.error ?? `Server returned ${res.status}.`);
       }
       const { id } = (await res.json()) as { id: string };
+
+      // The signature has to happen in a tab: wallet extensions inject their
+      // provider into web pages, and a popup cannot reach it. But closing the
+      // popup at the same moment left people with no idea whether anything had
+      // happened. So we stay open, wait, and say so when it lands.
       await browser.tabs.create({ url: `${APP_URL}/confirm/${id}` });
-      window.close();
+      setBusy(false);
+      setStage("signing");
+      void waitForSignature(id);
     } catch (err) {
       setActionError(
         err instanceof Error
@@ -338,6 +350,39 @@ export default function App() {
           : "Could not reach the dashboard.",
       );
       setBusy(false);
+    }
+  }
+
+  /**
+   * Polls the draft until the dashboard reports it signed.
+   *
+   * Chrome keeps a popup alive only while it has focus, so this often stops
+   * when the person moves to the wallet tab. That is fine: the mandate is real
+   * either way, the chain is the source of truth, and reopening the popup on a
+   * page with a signed draft shows the finished state rather than starting
+   * over. This exists for the case where the popup is detached or kept open.
+   */
+  async function waitForSignature(id: string) {
+    const deadline = Date.now() + 3 * 60_000;
+
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 2_000));
+      try {
+        const res = await fetch(`${APP_URL}/api/drafts/${id}`);
+        if (!res.ok) continue;
+        const body = (await res.json()) as {
+          status?: string;
+          mandateId?: string | null;
+          txHash?: string | null;
+        };
+        if (body.txHash) {
+          setOrder({ mandateId: body.mandateId ?? null, txHash: body.txHash });
+          setStage("order-done");
+          return;
+        }
+      } catch {
+        // Dashboard briefly unreachable. Keep waiting; the tab is still open.
+      }
     }
   }
 
@@ -386,6 +431,12 @@ export default function App() {
 
       {stage === "watch-done" && savedWatch && (
         <WatchDone watch={savedWatch} onClose={() => window.close()} />
+      )}
+
+      {stage === "signing" && <Signing />}
+
+      {stage === "order-done" && order && (
+        <OrderDone order={order} onClose={() => window.close()} />
       )}
     </main>
   );
@@ -882,6 +933,71 @@ function ReviewCard({
             ? "The cap is enforced onchain. The agent cannot spend past it"
             : "Watched from your browser. This page never leaves your machine"}
         </p>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The wait between handing off and the wallet coming back.
+ *
+ * Says what is happening and where, because the alternative was a popup that
+ * vanished mid-action and left people guessing whether anything had worked.
+ */
+function Signing() {
+  return (
+    <section className="glass-panel rise flex flex-col items-center gap-3 p-6 text-center">
+      <span className="size-2 animate-pulse rounded-full bg-accent-bright" />
+      <h2 className="text-lg font-semibold tracking-tight text-ink">
+        Waiting for your signature
+      </h2>
+      <p className="text-sm leading-relaxed text-ink-muted">
+        Your wallet opened in a new tab. Approve it there and this will update.
+      </p>
+      <p className="text-xs leading-relaxed text-ink-faint">
+        Nothing is set up until you sign. Close this and nothing happens.
+      </p>
+    </section>
+  );
+}
+
+/**
+ * The order is on-chain. Same shape as WatchDone, because finishing something
+ * should feel the same whichever thing you finished.
+ */
+function OrderDone({
+  order,
+  onClose,
+}: {
+  order: { mandateId: string | null; txHash: string };
+  onClose: () => void;
+}) {
+  return (
+    <section className="glass-panel rise flex flex-col items-center gap-3 p-6 text-center">
+      <span className="dot dot-active" />
+      <h2 className="text-lg font-semibold tracking-tight text-ink">Order set up</h2>
+      <p className="text-sm leading-relaxed text-ink-muted">
+        {order.mandateId !== null
+          ? `Mandate #${order.mandateId} is live. The agent can act inside it, and not a unit past it.`
+          : "Your mandate is live. The agent can act inside it, and not a unit past it."}
+      </p>
+      <p className="note note-accent">
+        Revoke it whenever you like. You do not need our permission
+      </p>
+      <p className="break-all font-mono text-[0.6875rem] leading-relaxed text-ink-faint">
+        {order.txHash.slice(0, 18)}…{order.txHash.slice(-6)}
+      </p>
+      <div className="flex w-full gap-2">
+        <button
+          type="button"
+          onClick={() => void browser.tabs.create({ url: APP_URL })}
+          className="btn-ghost flex-1 px-3 py-3 text-sm"
+        >
+          Open dashboard
+        </button>
+        <button type="button" onClick={onClose} className="btn-primary flex-1 px-3 py-3 text-sm">
+          Done
+        </button>
       </div>
     </section>
   );

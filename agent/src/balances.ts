@@ -69,6 +69,12 @@ async function main() {
   if (config.mandateAddress) {
     wallets.push({ role: "VAULT", address: config.mandateAddress as Address });
   }
+  // The router's USDC reserve is what actually limits a demo: it pays every
+  // swap out of its own pocket, so an empty reserve stops execution even when
+  // the vault is full and the mandate has plenty of cap left.
+  if (config.demoRouter) {
+    wallets.push({ role: "ROUTER", address: config.demoRouter });
+  }
 
   console.log(`\n${activeChain.name} (chain ${activeChain.id})\n`);
   console.log("role      address                                       OKB      USDT      USDC");

@@ -149,17 +149,30 @@ Real on-chain actions taken by the agent, unattended, with real money.
 
 ### Mainnet
 
-Same agent, same key, same mandate. The only thing that changed between these
-two rows was the price the router offered.
+Two runs, on two separate mandates, days apart. Each is a pair: the agent acts
+on its own, then the router's rate is dropped below the owner's price floor and
+the same agent is told to buy anyway.
+
+**Mandate #1**, *"buy it the moment it drops 8%"*
 
 | What | Tx |
 |---|---|
-| Agent executed a swap on its own, inside its mandate. Spent 4 USDT, received 3.998 USDC, 16 left of the cap | [`0xbf431b33…`](https://www.okx.com/web3/explorer/xlayer/tx/0xbf431b339a4ff84c67851db2d2aac5744d8491acd49c3529ce8eaa6d6474300b) |
-| The router's rate was then dropped below the owner's price floor, and the same agent was **refused by the contract**. Reverted, `ReceivedLessThanMinimum(0.99, 0.90)` | [`0x255068e7…`](https://www.okx.com/web3/explorer/xlayer/tx/0x255068e702288bde4b5677111e75c2e5ef51c567756292636e3a7a89602ad456) |
+| Executed on its own. Spent 4 USDT, received 3.996 USDC, 15 left of the cap | [`0x07108663…`](https://www.okx.com/web3/explorer/xlayer/tx/0x07108663251e453a26a0e6b3d551fee7fc6987e824a174287d6a34dc21702d33) |
+| **Refused by the contract** after the rate dropped. Reverted, `ReceivedLessThanMinimum(0.99, 0.90)` | [`0xd7cc7a53…`](https://www.okx.com/web3/explorer/xlayer/tx/0xd7cc7a53a16ee5f73916986caefe9f01ecba80c1b94eb357d322942a69dddf07) |
 
-The agent held a valid signature, was inside its cap, and called an allowlisted
-router. It still could not move the money, because the price was wrong.
-Permission was never what stood in its way.
+**Mandate #0**, *"buy USDC with USDT when the price is right"*
+
+| What | Tx |
+|---|---|
+| Executed on its own. Spent 4 USDT, received 3.998 USDC, 16 left of the cap | [`0xbf431b33…`](https://www.okx.com/web3/explorer/xlayer/tx/0xbf431b339a4ff84c67851db2d2aac5744d8491acd49c3529ce8eaa6d6474300b) |
+| **Refused by the contract** after the rate dropped. Reverted, `ReceivedLessThanMinimum(0.99, 0.90)` | [`0x255068e7…`](https://www.okx.com/web3/explorer/xlayer/tx/0x255068e702288bde4b5677111e75c2e5ef51c567756292636e3a7a89602ad456) |
+
+In every case the agent held a valid signature, was inside its cap, and called
+an allowlisted router. It still could not move the money, because the price was
+wrong. Permission was never what stood in its way.
+
+The second pair is the one in the demo video, so the hashes on screen can be
+checked against this table.
 
 ### Testnet
 
